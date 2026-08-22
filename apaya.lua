@@ -764,73 +764,118 @@ local function getRelativeBoothLocation(spawn, position)
 end
 
 local function buildBoothIndex()
+
     local boothsByOwnerId = {}
     local spawn = getSpawnPart()
 
     for _, booth in ipairs(
         CollectionService:GetTagged("TradeBoothStand")
     ) do
-        local ownerId = booth:GetAttribute("Owner")
-        local position = getBoothPosition(booth)
-        local location = getRelativeBoothLocation(spawn, position)
+
+        local ownerId =
+            booth:GetAttribute("Owner")
+
+        local position =
+            getBoothPosition(booth)
+
+        local location =
+            getRelativeBoothLocation(
+                spawn,
+                position
+            )
 
         if location then
-            location = booth.Name .. " • " .. location
+            location =
+                booth.Name
+                .. " • "
+                .. location
         else
-            location = booth.Name
+            location =
+                booth.Name
+        end
+
+        if DEBUG then
+
+            print(
+                "================================"
+            )
+
+            print(
+                "[BOOTH DEBUG]",
+                booth:GetFullName()
+            )
+
+            print(
+                "Owner:",
+                tostring(ownerId)
+            )
+
+            print(
+                "Attributes:"
+            )
+
+            for attributeName, attributeValue
+                in pairs(booth:GetAttributes()) do
+
+                print(
+                    "   ",
+                    attributeName,
+                    "=",
+                    tostring(attributeValue)
+                )
+            end
+
+            print(
+                "================================"
+            )
         end
 
         if ownerId ~= nil then
+
             boothsByOwnerId[normalizeId(ownerId)] = {
-                location = location,
-                position = position,
-            }
+    location = location,
+    position = position,
+    booth = booth,
+    ownerId = ownerId,
+}
+
         end
     end
 
     return boothsByOwnerId
 end
 
-local function getBoothMetadata(ownerId, listing, boothsByOwnerId)
-    local booth = typeof(listing.Booth) == "table" and listing.Booth or nil
+local function getBoothMetadata(
+    ownerId,
+    listing,
+    boothsByOwnerId
+)
+    local indexedBooth =
+        boothsByOwnerId
+        and boothsByOwnerId[
+            normalizeId(ownerId)
+        ]
 
-    local claimed = listing.BoothClaimed
-        or listing.IsBoothClaimed
-        or listing.IsClaimed
-        or listing.Claimed
-        or (booth and (booth.IsClaimed or booth.Claimed))
+    local location =
+        indexedBooth
+        and indexedBooth.location
 
-    local location = listing.BoothLocation
-        or listing.Location
-        or listing.BoothPosition
-        or (booth and (booth.Location or booth.Position or booth.BoothLocation))
+    if not location
+        and typeof(listing) == "table" then
 
-    local indexedBooth = boothsByOwnerId
-        and boothsByOwnerId[normalizeId(ownerId)]
-
-    if location == nil and indexedBooth then
-        location = indexedBooth.location
-
-        if location == nil and indexedBooth.position then
-            location = string.format(
-                "X: %.0f, Y: %.0f, Z: %.0f studs",
-                indexedBooth.position.X,
-                indexedBooth.position.Y,
-                indexedBooth.position.Z
-            )
-        end
+        location =
+            listing.BoothLocation
+            or listing.Location
     end
 
-    if typeof(claimed) ~= "boolean" then
-        claimed = ownerId ~= nil
-    end
+    if not location
+        or tostring(location) == "" then
 
-    if location == nil or tostring(location) == "" then
         location = "Lokasi tidak tersedia"
     end
 
     return {
-        claimed = claimed,
+        claimed = indexedBooth ~= nil,
         location = tostring(location),
     }
 end
@@ -2320,11 +2365,51 @@ local function scan()
         countListings(data)
 
     local boothsByOwnerId = buildBoothIndex()
+    print("======================================")
+print("[BOOTH INDEX] Claimed booths:")
+print("======================================")
+
+for ownerId, boothData in pairs(boothsByOwnerId) do
+    print(
+        "[CLAIMED]",
+        "Owner:",
+        tostring(ownerId),
+        "| Booth:",
+        boothData.booth
+            and boothData.booth:GetFullName()
+            or "nil"
+    )
+end
+
+print("======================================")
 
     print(
         "[Scanner] Booth listings loaded:",
         loadedListingCount
     )
+    print("======================================")
+print("[LISTING -> BOOTH MATCH TEST]")
+print("======================================")
+
+for ownerId, listings in pairs(data) do
+
+    local boothData =
+        boothsByOwnerId[
+            normalizeId(ownerId)
+        ]
+
+    print(
+        "[OWNER]",
+        tostring(ownerId),
+        "| Booth:",
+        boothData
+            and boothData.booth
+            and boothData.booth:GetFullName()
+            or "NOT FOUND"
+    )
+end
+
+print("======================================")
 
     if loadedListingCount == 0 then
 
