@@ -105,6 +105,7 @@ local BOOSTED_ITEMS = {
     ["Wreath Shot"] = true,
     ["Zeus' Revenge"] = true,
     ["2025"] = true,
+    ["Fortune Cleaver"] = true,
     ["Blizzard Smash"] = true,
     ["Blue Hexplosion"] = true,
     ["Brazil Explosion"] = true,
