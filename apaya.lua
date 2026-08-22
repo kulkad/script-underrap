@@ -63,6 +63,7 @@ local WEBHOOKS = {
 local BOOSTED_ITEMS = {
     ["Coconut Failure"] = true,
     ["Sword of Order"] = true,
+    ["Glacial Blade"] = true,
     ["Tidewither"] = true,
     ["Avis Scythe"] = true,
     ["Mummy's Curse"] = true,
