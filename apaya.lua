@@ -67,6 +67,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Ranked Season 20 Champion"] = true,
     ["Frog"] = true,
     ["Fire Dragon"] = true,
     ["Frozen Doomblade"] = true,
@@ -2335,10 +2336,75 @@ local function getNewServer()
 end
 
 --==================================================
+-- TELEPORT RECOVERY
+--==================================================
+
+local teleportRecoveryRunning = false
+
+local function recoverTeleport()
+
+    if teleportRecoveryRunning then
+        return
+    end
+
+    teleportRecoveryRunning = true
+
+    task.spawn(function()
+
+        task.wait(3)
+
+        if not LocalPlayer then
+            teleportRecoveryRunning = false
+            return
+        end
+
+        print("======================================")
+        print("[RECOVERY] Teleport gagal.")
+        print("[RECOVERY] Mencoba masuk kembali ke Trade Plaza...")
+        print("======================================")
+
+        local success, err = pcall(function()
+
+            TeleportService:Teleport(
+                game.PlaceId,
+                LocalPlayer
+            )
+
+        end)
+
+        if not success then
+
+            warn(
+                "[RECOVERY] Gagal rejoin:",
+                tostring(err)
+            )
+
+            task.wait(5)
+
+            pcall(function()
+
+                TeleportService:TeleportAsync(
+                    game.PlaceId,
+                    {LocalPlayer}
+                )
+
+            end)
+
+        end
+
+        teleportRecoveryRunning = false
+
+    end)
+
+end
+
+
+--==================================================
 -- TELEPORT FAILED HANDLER
 --==================================================
 
 TeleportService.TeleportInitFailed:Connect(
+
     function(
         player,
         teleportResult,
@@ -2354,7 +2420,11 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(teleportResult),
             tostring(errorMessage)
         )
+
+        recoverTeleport()
+
     end
+
 )
 
 --==================================================
