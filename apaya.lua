@@ -156,7 +156,6 @@ local BOOSTED_ITEMS = {
     ["Amethyst Greatsword"] = true,
     ["Ancient Iceblade"] = true,
     ["Angelic Cleaver"] = true,
-    ["Aquatic Greatsword"] = true,
     ["Astral Axe"] = true,
     ["Astraea Blade"] = true,
     ["Aurora Carver"] = true,
