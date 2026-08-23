@@ -67,6 +67,8 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Frog"] = true,
+    ["Fire Dragon"] = true,
     ["Frozen Doomblade"] = true,
     ["Runic Blade"] = true,
     ["Lunar Bloom"] = true,
@@ -347,6 +349,7 @@ local BOOSTED_ITEMS = {
     ["Voidstrike Blade"] = true,
     ["Water Bow"] = true,
     ["Wildheart"] = true,
+    ["Haidilao Dance"] = true,
     ["Wintery Greatblade"] = true,
     ["Wrapped Froststaff"] = true,
     ["Yuleflame"] = true,
@@ -370,7 +373,9 @@ local BOOSTED_TYPE_EXCLUSIONS = {
 --==================================================
 
 local NUKE_ITEMS = {
-    ["Cloud"] = 19500,
+    ["Cloud"] = 19000,
+    ["Borealis"] = 25000,
+    ["Chroma Blade"] = 14000,
 }
 
 --==================================================
