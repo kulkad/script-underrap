@@ -67,6 +67,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Frozen Doomblade"] = true,
     ["Runic Blade"] = true,
     ["Lunar Bloom"] = true,
     ["Sandstorm Slasher"] = true,
