@@ -70,6 +70,7 @@ local BOOSTED_ITEMS = {
     ["Floral Slicer"] = true,
     ["Ranked Season 19 Champion"] = true,
     ["Keyblade"] = true,
+    ["Casual Failure"] = true,
     ["Lightning Dagger"] = true,
     ["Oni Claws"] = true,
     ["Dual Devil Katana"] = true,
