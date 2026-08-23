@@ -742,31 +742,114 @@ local function getRelativeBoothLocation(spawn, position)
         return nil
     end
 
+    -- Posisi booth relatif terhadap spawn
     local offset = spawn.CFrame:PointToObjectSpace(position)
-    local horizontal = math.abs(offset.X) > 10
-    local vertical = math.abs(offset.Z) > 10
 
-    if not horizontal and not vertical then
-        return string.format(
-            "dekat spawn • %.0f studs",
-            (position - spawn.Position).Magnitude
-        )
+    -- Jarak booth dari spawn
+    local distance = (position - spawn.Position).Magnitude
+
+    --==================================================
+    -- RING / AREA
+    --==================================================
+
+    -- Ring Dalam = area tengah saja
+    -- Ring Luar  = area setelah ring tengah,
+    -- termasuk area belakang karpet merah.
+    --
+    -- Kalau ternyata batasnya sedikit terlalu besar/kecil,
+    -- cukup ubah angka ini.
+    local INNER_RADIUS = 65
+
+    local ring
+
+    if distance <= INNER_RADIUS then
+        ring = "Dalam"
+    else
+        ring = "Luar"
     end
 
-    local horizontalName = offset.X < 0 and "kiri" or "kanan"
-    local verticalName = offset.Z < 0 and "depan" or "belakang"
+    --==================================================
+    -- DIRECTION
+    --==================================================
+
+    -- Berdasarkan posisi map:
+    --
+    --          ATAS
+    --     ATAS KIRI | ATAS KANAN
+    --          SPAWN
+    --       KIRI | KANAN
+    --     BAWAH KIRI | BAWAH KANAN
+    --          BAWAH
+    --
+    -- X:
+    -- + = kanan
+    -- - = kiri
+    --
+    -- Z:
+    -- - = atas / depan
+    -- + = bawah / belakang
+
+    local x = offset.X
+    local z = offset.Z
+
+    -- 0°  = kanan
+    -- 90° = atas
+    -- 180° = kiri
+    -- 270° = bawah
+    local angle = math.deg(math.atan2(-z, x))
+
+    if angle < 0 then
+        angle += 360
+    end
+
     local direction
 
-    if horizontal and vertical then
-        direction = horizontalName .. "-" .. verticalName
+    --==================================================
+    -- 8 DIRECTIONS
+    --==================================================
+
+    if angle >= 337.5 or angle < 22.5 then
+
+        direction = "Kanan"
+
+    elseif angle >= 22.5 and angle < 67.5 then
+
+        direction = "Atas Kanan"
+
+    elseif angle >= 67.5 and angle < 112.5 then
+
+        direction = "Atas"
+
+    elseif angle >= 112.5 and angle < 157.5 then
+
+        direction = "Atas Kiri"
+
+    elseif angle >= 157.5 and angle < 202.5 then
+
+        direction = "Kiri"
+
+    elseif angle >= 202.5 and angle < 247.5 then
+
+        direction = "Bawah Kiri"
+
+    elseif angle >= 247.5 and angle < 292.5 then
+
+        direction = "Bawah"
+
     else
-        direction = horizontal and horizontalName or verticalName
+
+        direction = "Bawah Kanan"
     end
 
+    --==================================================
+    -- FINAL LOCATION
+    --==================================================
+
     return string.format(
-        "%s dari spawn • %.0f studs",
+        "%s • %s • %.0f studs",
+        ring,
         direction,
-        (position - spawn.Position).Magnitude
+        distance
     )
 end
 
