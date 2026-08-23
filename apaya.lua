@@ -67,6 +67,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Festive Blade"] = true,
     ["Floral Slicer"] = true,
     ["Ranked Season 19 Champion"] = true,
     ["Keyblade"] = true,
