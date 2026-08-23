@@ -34,11 +34,11 @@ local DEEP_UNDERRAP_PERCENT = 50
 local DEBUG = true
 local DUMP_RAW_DATA = false
 
-local WEBHOOK_DELAY_SECONDS = 1
-local BOOTH_LOAD_DELAY_SECONDS = 5
+local WEBHOOK_DELAY_SECONDS = 1.5
+local BOOTH_LOAD_DELAY_SECONDS = 10
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
-local SERVER_HOP_DELAY_SECONDS = 10
+local SERVER_HOP_DELAY_SECONDS = 5
 local ENABLE_SERVER_HOP = true
 
 --==================================================
