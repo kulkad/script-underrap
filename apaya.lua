@@ -34,8 +34,8 @@ local DEEP_UNDERRAP_PERCENT = 50
 local DEBUG = true
 local DUMP_RAW_DATA = false
 
-local WEBHOOK_DELAY_SECONDS = 1.5
-local BOOTH_LOAD_DELAY_SECONDS = 10
+local WEBHOOK_DELAY_SECONDS = 1
+local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
 local SERVER_HOP_DELAY_SECONDS = 5
@@ -67,8 +67,8 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
-    ["Frog"] = true,
     ["Ranked Season 20 Champion"] = true,
+    ["Frog"] = true,
     ["Fire Dragon"] = true,
     ["Frozen Doomblade"] = true,
     ["Runic Blade"] = true,
@@ -80,7 +80,6 @@ local BOOSTED_ITEMS = {
     ["Floral Slicer"] = true,
     ["Ranked Season 19 Champion"] = true,
     ["Keyblade"] = true,
-    ["Golden Fang"] = true,
     ["Curse of the Nile"] = true,
     ["Tropical Thunder"] = true,
     ["Casual Failure"] = true,
@@ -2337,10 +2336,75 @@ local function getNewServer()
 end
 
 --==================================================
+-- TELEPORT RECOVERY
+--==================================================
+
+local teleportRecoveryRunning = false
+
+local function recoverTeleport()
+
+    if teleportRecoveryRunning then
+        return
+    end
+
+    teleportRecoveryRunning = true
+
+    task.spawn(function()
+
+        task.wait(3)
+
+        if not LocalPlayer then
+            teleportRecoveryRunning = false
+            return
+        end
+
+        print("======================================")
+        print("[RECOVERY] Teleport gagal.")
+        print("[RECOVERY] Mencoba masuk kembali ke Trade Plaza...")
+        print("======================================")
+
+        local success, err = pcall(function()
+
+            TeleportService:Teleport(
+                game.PlaceId,
+                LocalPlayer
+            )
+
+        end)
+
+        if not success then
+
+            warn(
+                "[RECOVERY] Gagal rejoin:",
+                tostring(err)
+            )
+
+            task.wait(5)
+
+            pcall(function()
+
+                TeleportService:TeleportAsync(
+                    game.PlaceId,
+                    {LocalPlayer}
+                )
+
+            end)
+
+        end
+
+        teleportRecoveryRunning = false
+
+    end)
+
+end
+
+
+--==================================================
 -- TELEPORT FAILED HANDLER
 --==================================================
 
 TeleportService.TeleportInitFailed:Connect(
+
     function(
         player,
         teleportResult,
@@ -2356,7 +2420,11 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(teleportResult),
             tostring(errorMessage)
         )
+
+        recoverTeleport()
+
     end
+
 )
 
 --==================================================
