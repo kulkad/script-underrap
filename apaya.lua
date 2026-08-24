@@ -68,8 +68,10 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Awakened Winter's Touch"] = true,
     ["Ranked Season 20 Champion"] = true,
     ["Frog"] = true,
+    ["Awakened Winter's Touch"] = true,
     ["Fire Dragon"] = true,
     ["Frozen Doomblade"] = true,
     ["Runic Blade"] = true,
@@ -81,6 +83,8 @@ local BOOSTED_ITEMS = {
     ["Floral Slicer"] = true,
     ["Ranked Season 19 Champion"] = true,
     ["Keyblade"] = true,
+    ["New Years Slicer"] = true,
+    ["Headless Horror"] = true,
     ["Curse of the Nile"] = true,
     ["Tropical Thunder"] = true,
     ["Casual Failure"] = true,
@@ -2266,7 +2270,7 @@ local function getNewServer()
     end
 
     local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
+        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
         tostring(game.PlaceId)
     )
 
@@ -2308,7 +2312,6 @@ local function getNewServer()
         return nil
     end
 
-
     --==================================================
     -- FILTER SERVER
     --==================================================
@@ -2325,6 +2328,7 @@ local function getNewServer()
             and server.playing < server.maxPlayers
         then
 
+            -- SERVER 10+ PLAYER
             if server.playing >= MIN_PREFERRED_PLAYERS then
 
                 table.insert(
@@ -2334,6 +2338,7 @@ local function getNewServer()
 
             else
 
+                -- FALLBACK < 10 PLAYER
                 table.insert(
                     fallbackServers,
                     server
@@ -2342,7 +2347,6 @@ local function getNewServer()
             end
         end
     end
-
 
     --==================================================
     -- PRIORITAS SERVER RAME
@@ -2355,7 +2359,7 @@ local function getNewServer()
         pool = preferredServers
 
         print(
-            "[SERVER HOP] Mode: SERVER RAME"
+            "[SERVER HOP] Mode: SERVER RAME (10+ PLAYER)"
         )
 
     elseif #fallbackServers > 0 then
@@ -2375,9 +2379,8 @@ local function getNewServer()
         return nil
     end
 
-
     --==================================================
-    -- RANDOM DARI POOL
+    -- RANDOM SERVER
     --==================================================
 
     local selected =
@@ -2387,7 +2390,6 @@ local function getNewServer()
                 #pool
             )
         ]
-
 
     print(
         "======================================"
@@ -2409,80 +2411,14 @@ local function getNewServer()
         "======================================"
     )
 
-
     return selected.id
 end
-
---==================================================
--- TELEPORT RECOVERY
---==================================================
-
-local teleportRecoveryRunning = false
-
-local function recoverTeleport()
-
-    if teleportRecoveryRunning then
-        return
-    end
-
-    teleportRecoveryRunning = true
-
-    task.spawn(function()
-
-        task.wait(3)
-
-        if not LocalPlayer then
-            teleportRecoveryRunning = false
-            return
-        end
-
-        print("======================================")
-        print("[RECOVERY] Teleport gagal.")
-        print("[RECOVERY] Mencoba masuk kembali ke Trade Plaza...")
-        print("======================================")
-
-        local success, err = pcall(function()
-
-            TeleportService:Teleport(
-                game.PlaceId,
-                LocalPlayer
-            )
-
-        end)
-
-        if not success then
-
-            warn(
-                "[RECOVERY] Gagal rejoin:",
-                tostring(err)
-            )
-
-            task.wait(5)
-
-            pcall(function()
-
-                TeleportService:TeleportAsync(
-                    game.PlaceId,
-                    {LocalPlayer}
-                )
-
-            end)
-
-        end
-
-        teleportRecoveryRunning = false
-
-    end)
-
-end
-
 
 --==================================================
 -- TELEPORT FAILED HANDLER
 --==================================================
 
 TeleportService.TeleportInitFailed:Connect(
-
     function(
         player,
         teleportResult,
@@ -2498,11 +2434,7 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(teleportResult),
             tostring(errorMessage)
         )
-
-        recoverTeleport()
-
     end
-
 )
 
 --==================================================
@@ -2557,8 +2489,8 @@ local function serverHop()
     end
 
     print(
-        "[Server Hop] Target:",
-        serverId
+        "[Server Hop] Teleport ke:",
+        tostring(serverId)
     )
 
     local success, result =
@@ -2577,7 +2509,7 @@ local function serverHop()
 
         warn(
             "[Server Hop] Teleport gagal:",
-            result
+            tostring(result)
         )
 
     else
@@ -2585,6 +2517,7 @@ local function serverHop()
         print(
             "[Server Hop] Teleport request berhasil."
         )
+
     end
 end
 
