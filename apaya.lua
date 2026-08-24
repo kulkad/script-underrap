@@ -68,6 +68,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Clan Ascendancy"] = true,
     ["New Years Slicer"] = true,
     ["Dual Frosted Gleam"] = true,
     ["Dual Sakura Fan"] = true,
