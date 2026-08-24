@@ -42,6 +42,48 @@ local SERVER_HOP_DELAY_SECONDS = 5
 local ENABLE_SERVER_HOP = true
 
 --==================================================
+-- SERVER BROWSER SETTINGS
+--==================================================
+
+local TARGET_REGIONS = {
+    US = true,
+    SG = true,
+    NL = true,
+    BR = true,
+}
+
+-- Server dengan 11+ player diprioritaskan
+local MIN_PREFERRED_PLAYERS = 11
+
+-- Server <=10 player hanya dipakai setiap 5-10 hop
+local LOW_PLAYER_CHANCE_MIN = 5
+local LOW_PLAYER_CHANCE_MAX = 10
+
+local serverHopCount = 0
+local nextLowPlayerHop =
+    math.random(
+        LOW_PLAYER_CHANCE_MIN,
+        LOW_PLAYER_CHANCE_MAX
+    )
+
+--==================================================
+-- SERVER HOP FILTER
+--==================================================
+
+-- Server dengan > 10 player menjadi prioritas.
+local PREFERRED_MIN_PLAYERS = 11
+
+-- Server <= 10 player hanya dipilih sesekali.
+local LOW_PLAYER_HOP_MIN = 5
+local LOW_PLAYER_HOP_MAX = 10
+
+-- Contoh:
+-- random 5 berarti kira-kira 1/5 hop masuk server kecil
+-- random 10 berarti kira-kira 1/10 hop masuk server kecil.
+local LOW_PLAYER_HOP_CHANCE_MIN = 5
+local LOW_PLAYER_HOP_CHANCE_MAX = 10
+
+--==================================================
 -- WEBHOOKS
 --==================================================
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
@@ -2144,10 +2186,16 @@ local function inspectListing(
             )
 
     local isDeepUnderrap =
-        isUnderrap
-        and discount >
-            DEEP_UNDERRAP_PERCENT
-        and not boosted
+    isUnderrap
+    and discount > DEEP_UNDERRAP_PERCENT
+    and rap < 1000000
+    and not boosted
+
+    local isMillionPlusDeepUnderrap =
+    isUnderrap
+    and discount > DEEP_UNDERRAP_PERCENT
+    and rap >= 1000000
+    and not boosted
 
     --==================================================
     -- DEBUG
@@ -2218,121 +2266,474 @@ local function inspectListing(
         or isNuke then
 
         return {
-            itemName = itemName,
+    itemName = itemName,
+    itemKey = itemKey,
+    rapKey = rapKey,
+    itemType = itemType,
 
-            -- PENTING:
-            -- itemKey tetap internal key.
-            itemKey = itemKey,
+    price = price,
+    rap = rap,
 
-            rapKey = rapKey,
+    discount = discount,
+    profit = rap - price,
 
-            itemType = itemType,
+    tierName = tierName,
 
-            price = price,
-            rap = rap,
+    boosted = boosted,
+    nuke = isNuke,
+    nukeLimit = nukeLimit,
 
-            discount = discount,
-            profit = rap - price,
+    deepUnderrap = isDeepUnderrap,
 
-            tierName = tierName,
+    millionPlusDeepUnderrap =
+        isMillionPlusDeepUnderrap,
 
-            boosted = boosted,
-            nuke = isNuke,
-
-            nukeLimit = nukeLimit,
-
-            deepUnderrap =
-                isDeepUnderrap,
-
-            boothClaimed = boothMetadata.claimed,
-            boothLocation = boothMetadata.location,
-        }
+    boothClaimed = boothMetadata.claimed,
+    boothLocation = boothMetadata.location,
+}
     end
 end
 
 --==================================================
--- SERVER API
+-- SERVER BROWSER CONFIG
+--==================================================
+
+local TARGET_REGIONS = {
+    US = true,
+    SG = true,
+    NL = true,
+    BR = true,
+}
+
+local MIN_PREFERRED_PLAYERS = 11
+
+local LOW_PLAYER_CHANCE_MIN = 5
+local LOW_PLAYER_CHANCE_MAX = 10
+
+local serverHopCount = 0
+
+local nextLowPlayerHop =
+    math.random(
+        LOW_PLAYER_CHANCE_MIN,
+        LOW_PLAYER_CHANCE_MAX
+    )
+
+
+--==================================================
+-- GET SERVER BROWSER REMOTE
+--==================================================
+
+local function getServerBrowserRemote(name)
+
+    local success, result =
+        pcall(function()
+
+            local Packages =
+                ReplicatedStorage:WaitForChild(
+                    "Packages",
+                    10
+                )
+
+            if not Packages then
+                error("Packages tidak ditemukan.")
+            end
+
+            local Net =
+                Packages:WaitForChild(
+                    "Net",
+                    10
+                )
+
+            if not Net then
+                error("Packages.Net tidak ditemukan.")
+            end
+
+            local NetModule =
+                require(Net)
+
+            if not NetModule then
+                error("Gagal require Packages.Net.")
+            end
+
+            return NetModule:RemoteFunction(name)
+
+        end)
+
+    if not success then
+
+        warn(
+            "[SERVER HOP] Gagal mengambil RemoteFunction "
+            .. tostring(name)
+            .. ": "
+            .. tostring(result)
+        )
+
+        return nil
+    end
+
+    return result
+end
+
+
+--==================================================
+-- GET SERVER BROWSER SERVERS
+--==================================================
+
+local function getServerBrowserServers()
+
+    local refreshRemote =
+        getServerBrowserRemote("RefreshServerBrowser")
+
+    if not refreshRemote then
+        warn(
+            "[SERVER HOP] RefreshServerBrowser tidak ditemukan."
+        )
+        return nil
+    end
+
+    print("======================================")
+    print("[SERVER HOP] Refresh Remote:", refreshRemote)
+    print("[SERVER HOP] Class:", refreshRemote.ClassName)
+    print("======================================")
+
+    -- Coba EXACT seperti ServerBrowserController:
+    -- self.Filter:Get() ketika tombol "All" dipilih = nil
+    local success, result =
+        pcall(function()
+            return refreshRemote:InvokeServer(nil)
+        end)
+
+    print("======================================")
+    print("[SERVER HOP] Invoke success:", success)
+    print("[SERVER HOP] Result:", result)
+    print("[SERVER HOP] Result type:", typeof(result))
+    print("======================================")
+
+    if not success then
+        warn(
+            "[SERVER HOP] RefreshServerBrowser error:",
+            tostring(result)
+        )
+        return nil
+    end
+
+    if result == nil then
+        warn(
+            "[SERVER HOP] RefreshServerBrowser memang mengembalikan nil."
+        )
+        return nil
+    end
+
+    if typeof(result) ~= "table" then
+        warn(
+            "[SERVER HOP] Return bukan table. Type:",
+            typeof(result)
+        )
+        return nil
+    end
+
+    print(
+        "[SERVER HOP] Jumlah buffer:",
+        #result
+    )
+
+    local ServerBrowserData =
+        require(
+            ReplicatedStorage
+                :WaitForChild("Shared")
+                :WaitForChild("ServerBrowserData")
+        )
+
+    local servers = {}
+
+    for i, replicationBuffer in ipairs(result) do
+
+        local serverData
+
+        local decodeSuccess, decodeResult =
+            pcall(function()
+
+                return ServerBrowserData.readReplicationBuffer(
+                    replicationBuffer
+                )
+
+            end)
+
+        if decodeSuccess and decodeResult then
+
+            serverData = decodeResult
+
+            table.insert(
+                servers,
+                serverData
+            )
+
+            print(
+                "[SERVER HOP] Server:",
+                i,
+                serverData.jobId,
+                serverData.country,
+                serverData.region,
+                serverData.players
+            )
+
+        else
+
+            warn(
+                "[SERVER HOP] Gagal decode buffer:",
+                i,
+                tostring(decodeResult)
+            )
+
+        end
+    end
+
+    print(
+        "[SERVER HOP] Total server decoded:",
+        #servers
+    )
+
+    return servers
+end
+
+
+--==================================================
+-- GET NEW SERVER
 --==================================================
 
 local function getNewServer()
 
-    if not REQUEST then
-        warn("[SERVER HOP] Request function tidak tersedia.")
+    serverHopCount += 1
+
+
+    local servers =
+        getServerBrowserServers()
+
+
+    if not servers
+        or #servers == 0
+    then
+
+        warn(
+            "[SERVER HOP] Server Browser kosong."
+        )
+
         return nil
     end
 
-    local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
-        tostring(game.PlaceId)
-    )
 
-    local success, response = pcall(function()
-        return REQUEST({
-            Url = url,
-            Method = "GET",
-        })
-    end)
+    --==================================================
+    -- FILTER REGION + JOINABLE
+    --==================================================
 
-    if not success then
-        warn("[SERVER HOP ERROR]", response)
-        return nil
-    end
+    local regionalServers = {}
 
-    if not response or not response.Body then
-        warn("[SERVER HOP] Response kosong.")
-        return nil
-    end
 
-    local decodeSuccess, data = pcall(function()
-        return HttpService:JSONDecode(response.Body)
-    end)
+    for _, server
+        in ipairs(servers)
+    do
 
-    if not decodeSuccess or not data then
-        warn("[SERVER HOP] JSON decode gagal.")
-        return nil
-    end
+        local isCurrentServer =
+            server.jobId == game.JobId
 
-    if not data.data then
-        warn("[SERVER HOP] Server data tidak ditemukan.")
-        return nil
-    end
 
-    local availableServers = {}
+        local validRegion =
+            TARGET_REGIONS[
+                server.country
+            ] == true
 
-    for _, server in ipairs(data.data) do
-        if server.id
-            and server.id ~= game.JobId
-            and server.playing
+
+        local joinable =
+            server.flags
+            and server.flags.Joinable
+
+
+        local hasSpace =
+            server.players
             and server.maxPlayers
-            and server.playing < server.maxPlayers
+            and server.players < server.maxPlayers
+
+
+        if not isCurrentServer
+            and validRegion
+            and joinable
+            and hasSpace
         then
+
             table.insert(
-                availableServers,
+                regionalServers,
                 server
             )
+
         end
+
     end
 
-    if #availableServers == 0 then
-        warn("[SERVER HOP] Tidak ada server lain tersedia.")
+
+    if #regionalServers == 0 then
+
+        warn(
+            "[SERVER HOP] Tidak ada server US/SG/NL/BR yang tersedia."
+        )
+
         return nil
     end
 
-    -- Random server biasa
-    local selected = availableServers[
-        math.random(1, #availableServers)
-    ]
+
+    --==================================================
+    -- PISAH SERVER BESAR / KECIL
+    --==================================================
+
+    local highPlayerServers = {}
+    local lowPlayerServers = {}
+
+
+    for _, server
+        in ipairs(regionalServers)
+    do
+
+        if server.players
+            >= MIN_PREFERRED_PLAYERS
+        then
+
+            table.insert(
+                highPlayerServers,
+                server
+            )
+
+        else
+
+            table.insert(
+                lowPlayerServers,
+                server
+            )
+
+        end
+
+    end
+
+
+    --==================================================
+    -- TENTUKAN LOW PLAYER HOP
+    --==================================================
+
+    local allowLowPlayerServer =
+        serverHopCount >= nextLowPlayerHop
+
+
+    --==================================================
+    -- PILIH POOL
+    --==================================================
+
+    local pool
+
+
+    if allowLowPlayerServer
+        and #lowPlayerServers > 0
+    then
+
+        pool = lowPlayerServers
+
+
+        nextLowPlayerHop =
+            serverHopCount
+            + math.random(
+                LOW_PLAYER_CHANCE_MIN,
+                LOW_PLAYER_CHANCE_MAX
+            )
+
+
+        print(
+            "[SERVER HOP] Mode: LOW PLAYER SERVER"
+        )
+
+
+    elseif #highPlayerServers > 0 then
+
+        pool = highPlayerServers
+
+
+        print(
+            "[SERVER HOP] Mode: HIGH PLAYER SERVER"
+        )
+
+
+    elseif #lowPlayerServers > 0 then
+
+        pool = lowPlayerServers
+
+
+        print(
+            "[SERVER HOP] Tidak ada server >10 player, fallback ke server kecil."
+        )
+
+
+    else
+
+        warn(
+            "[SERVER HOP] Pool server kosong."
+        )
+
+        return nil
+
+    end
+
+
+    --==================================================
+    -- RANDOM SERVER
+    --==================================================
+
+    local selected =
+        pool[
+            math.random(
+                1,
+                #pool
+            )
+        ]
+
+
+    --==================================================
+    -- DEBUG
+    --==================================================
 
     print(
-        "[SERVER HOP] Target:",
-        tostring(selected.id),
-        "| Players:",
-        tostring(selected.playing),
+        "======================================"
+    )
+
+    print(
+        "[SERVER HOP] Target Server:",
+        tostring(selected.jobId)
+    )
+
+    print(
+        "[SERVER HOP] Players:",
+        tostring(selected.players),
         "/",
         tostring(selected.maxPlayers)
     )
 
-    return selected.id
+    print(
+        "[SERVER HOP] Country:",
+        tostring(selected.country)
+    )
+
+    print(
+        "[SERVER HOP] Region:",
+        tostring(selected.region)
+    )
+
+    print(
+        "[SERVER HOP] Server Type:",
+        tostring(selected.serverType)
+    )
+
+    print(
+        "======================================"
+    )
+
+
+    return selected
+
 end
 
 --==================================================
@@ -2466,10 +2867,73 @@ local function serverHop()
         SERVER_HOP_DELAY_SECONDS
     )
 
-    local serverId =
+
+    --==================================================
+    -- GET SERVER BROWSER TELEPORT REMOTE
+    --==================================================
+
+    local Net
+
+local successNet, resultNet =
+    pcall(function()
+
+        local packages =
+            ReplicatedStorage:
+            WaitForChild("Packages")
+
+        local netModule =
+            packages:
+            WaitForChild("Net")
+
+        return require(netModule)
+
+    end)
+
+if not successNet then
+
+    warn(
+        "[Server Hop] Gagal require Packages.Net:",
+        tostring(resultNet)
+    )
+
+    return
+end
+
+Net = resultNet
+
+
+local ServerBrowserTeleport
+
+local successTeleportRemote, resultTeleportRemote =
+    pcall(function()
+
+        return Net:RemoteFunction(
+            "ServerBrowserTeleport"
+        )
+
+    end)
+
+if not successTeleportRemote then
+
+    warn(
+        "[Server Hop] Gagal mengambil ServerBrowserTeleport:",
+        tostring(resultTeleportRemote)
+    )
+
+    return
+end
+
+ServerBrowserTeleport = resultTeleportRemote
+
+
+    --==================================================
+    -- GET TARGET SERVER
+    --==================================================
+
+    local selectedServer =
         getNewServer()
 
-    if not serverId then
+    if not selectedServer then
 
         warn(
             "[Server Hop] Tidak menemukan server baru."
@@ -2478,36 +2942,49 @@ local function serverHop()
         return
     end
 
+
     print(
         "[Server Hop] Target:",
-        serverId
+        selectedServer.jobId,
+        "| Region:",
+        selectedServer.country,
+        selectedServer.region,
+        "| Players:",
+        selectedServer.players
     )
+
+
+    --==================================================
+    -- TELEPORT VIA SERVER BROWSER
+    --==================================================
 
     local success, result =
         pcall(function()
 
-            TeleportService:
-                TeleportToPlaceInstance(
-                    game.PlaceId,
-                    serverId,
-                    LocalPlayer
-                )
+            return ServerBrowserTeleport:InvokeServer(
+                selectedServer.jobId,
+                selectedServer.placeId
+            )
 
         end)
+
 
     if not success then
 
         warn(
             "[Server Hop] Teleport gagal:",
-            result
+            tostring(result)
         )
 
-    else
+        recoverTeleport()
 
-        print(
-            "[Server Hop] Teleport request berhasil."
-        )
+        return
     end
+
+
+    print(
+        "[Server Hop] Teleport request berhasil."
+    )
 end
 
 --==================================================
@@ -2749,16 +3226,21 @@ print("======================================")
 
                 local webhookType
 
-                if listing.deepUnderrap then
+                if listing.millionPlusDeepUnderrap then
 
-                    webhookType =
-                        "DEEP_UNDERRAP"
+    -- RAP >= 1M tetapi underrap > 50%
+    -- masuk webhook 100K+
+    webhookType = "100K+"
 
-                else
+elseif listing.deepUnderrap then
 
-                    webhookType =
-                        listing.tierName
-                end
+    webhookType = "DEEP_UNDERRAP"
+
+else
+
+    webhookType = listing.tierName
+
+end
 
                 local sent =
                     sendWebhook(
