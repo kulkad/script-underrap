@@ -75,6 +75,7 @@ local BOOSTED_ITEMS = {
     ["Ranked Season 20 Champion"] = true,
     ["Dual Sakura Fan"] = true,
     ["Frog"] = true,
+    ["Dual Aurum Etherius"] = true,
     ["Inferno Greatscythe"] = true,
     ["Awakened Winter's Touch"] = true,
     ["Fire Dragon"] = true,
