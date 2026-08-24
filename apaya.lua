@@ -68,6 +68,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Dual Sakura Fan"] = true,
     ["Awakened Winter's Touch"] = true,
     ["Ranked Season 20 Champion"] = true,
     ["Dual Sakura Fan"] = true,
