@@ -68,6 +68,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Obsidian Blade"] = true,
     ["Phoenix Rebirth Emote"] = true,
     ["Malice Parasol"] = true,
     ["Ranked Season 5 Top 200"] = true,
