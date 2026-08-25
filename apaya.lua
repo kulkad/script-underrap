@@ -385,8 +385,11 @@ local BOOSTED_TYPE_EXCLUSIONS = {
 
 local NUKE_ITEMS = {
     ["Cloud"] = 19000,
+    ["Eternal Piercer"] = 24000,
+    ["Valentine Heart"] = 6800,
     ["Borealis"] = 25000,
     ["Chroma Blade"] = 14000,
+    ["Queen Blade"] = 26000,
 }
 
 --==================================================
