@@ -68,8 +68,11 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Supernova Beam"] = true,
     ["Headless Horror"] = true,
     ["Venomsanct"] = true,
+    ["Dual Frost Saber"] = true,
+    ["Plasma Blasters"] = true,
     ["Dunestrike Scimitar"] = true,
     ["Aurora Edge"] = true,
     ["Dual Widowbloom Blades"] = true,
@@ -399,9 +402,8 @@ local BOOSTED_TYPE_EXCLUSIONS = {
 --==================================================
 
 local NUKE_ITEMS = {
-    ["Cloud"] = 19000,
-    ["Eternal Piercer"] = 24000,
-    ["Valentine Heart"] = 6800,
+    ["Eternal Piercer"] = 26000,
+    ["Valentine Heart"] = 7000,
     ["Borealis"] = 25000,
     ["Cat Paw"] = 10200,
     ["Chroma Blade"] = 14000,
