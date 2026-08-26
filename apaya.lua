@@ -70,6 +70,7 @@ local BOOSTED_ITEMS = {
     ["Tidewither"] = true,
     ["Headless Horror"] = true,
     ["Venomsanct"] = true,
+    ["Dunestrike Scimitar"] = true,
     ["Aurora Edge"] = true,
     ["Dual Widowbloom Blades"] = true,
     ["Velvet Blade"] = true,
