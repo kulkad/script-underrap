@@ -68,6 +68,7 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Tidewither"] = true,
+    ["Headless Horror"] = true,
     ["Venomsanct"] = true,
     ["Aurora Edge"] = true,
     ["Dual Widowbloom Blades"] = true,
@@ -401,6 +402,7 @@ local NUKE_ITEMS = {
     ["Eternal Piercer"] = 24000,
     ["Valentine Heart"] = 6800,
     ["Borealis"] = 25000,
+    ["Cat Paw"] = 10200,
     ["Chroma Blade"] = 14000,
     ["Queen Blade"] = 26000,
 }
