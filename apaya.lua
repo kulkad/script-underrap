@@ -1545,13 +1545,17 @@ local function isBoosted(itemType, itemName)
     return BOOSTED_ITEMS[itemName] == true
 end
 
-local function getNukeLimit(itemName)
-    if not itemName then
+local function getNukeLimit(itemType, itemName)
+    if not itemType or not itemName then
         return nil
     end
 
-    local limit =
-        NUKE_ITEMS[itemName]
+    -- Semua item di NUKE_ITEMS hanya berlaku untuk Sword
+    if itemType ~= "Sword" then
+        return nil
+    end
+
+    local limit = NUKE_ITEMS[itemName]
 
     if typeof(limit) == "number" then
         return limit
@@ -2162,10 +2166,7 @@ local function inspectListing(
             itemName
         )
 
-    local nukeLimit =
-        getNukeLimit(
-            itemName
-        )
+    local nukeLimit = getNukeLimit(itemType, itemName)
 
     local isNuke =
         nukeLimit ~= nil
