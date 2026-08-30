@@ -41,6 +41,9 @@ local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 local SERVER_HOP_DELAY_SECONDS = 5
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
+local SERVER_HOP_CYCLE = 15
+local PREFERRED_HOP_COUNT = 14
+local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
 
 --==================================================
 -- WEBHOOKS
@@ -67,8 +70,18 @@ local BOOSTED_ITEMS = {
     ["Chroma Fortune Cleaver"] = true,
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
+    ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Zeus' Lightning"] = true,
+    ["Dual Lucky Fan"] = true,
+    ["Neo-Neko Katana"] = true,
+    ["Samurai's Set"] = true,
+    ["Wispwind Reaper"] = true,
+    ["Hero of Hope Saber"] = true,
+    ["Rose Wand"] = true,
     ["Frostblade"] = true,
+    ["Emerald Greatsword"] = true,
+    ["Hidden Beast Blade"] = true,
     ["Dual Pumpkin Fan"] = true,
     ["Dual Luminara"] = true,
     ["Supernova Beam"] = true,
@@ -2363,54 +2376,95 @@ local function getNewServer()
             and server.playing < server.maxPlayers
         then
 
-            -- SERVER 10+ PLAYER
             if server.playing >= MIN_PREFERRED_PLAYERS then
-
                 table.insert(
                     preferredServers,
                     server
                 )
-
             else
-
-                -- FALLBACK < 10 PLAYER
                 table.insert(
                     fallbackServers,
                     server
                 )
-
             end
         end
     end
 
     --==================================================
-    -- PRIORITAS SERVER RAME
+    -- 14X SERVER 10+ / 1X SERVER <10
     --==================================================
+
+    local hopCount = 0
+
+    pcall(function()
+        hopCount =
+            tonumber(
+                TeleportService:GetTeleportSetting(
+                    TELEPORT_SETTING_KEY
+                )
+            )
+            or 0
+    end)
+
+    local cyclePosition =
+        (hopCount % SERVER_HOP_CYCLE) + 1
+
+    local wantPreferred =
+        cyclePosition <= PREFERRED_HOP_COUNT
 
     local pool
 
-    if #preferredServers > 0 then
+    if wantPreferred then
 
-        pool = preferredServers
-
-        print(
-            "[SERVER HOP] Mode: SERVER RAME (10+ PLAYER)"
-        )
-
-    elseif #fallbackServers > 0 then
-
-        pool = fallbackServers
-
-        print(
-            "[SERVER HOP] Tidak ada server 10+ player, menggunakan fallback."
-        )
+        if #preferredServers > 0 then
+            pool = preferredServers
+            print(
+                "[SERVER HOP] Cycle:",
+                tostring(cyclePosition),
+                "/",
+                tostring(SERVER_HOP_CYCLE),
+                "| Target: 10+ PLAYER"
+            )
+        elseif #fallbackServers > 0 then
+            -- Target 10+ tidak tersedia, gunakan <10 agar hop tetap jalan.
+            pool = fallbackServers
+            print(
+                "[SERVER HOP] Cycle:",
+                tostring(cyclePosition),
+                "/",
+                tostring(SERVER_HOP_CYCLE),
+                "| 10+ TIDAK TERSEDIA -> FALLBACK <10"
+            )
+        end
 
     else
 
+        if #fallbackServers > 0 then
+            pool = fallbackServers
+            print(
+                "[SERVER HOP] Cycle:",
+                tostring(cyclePosition),
+                "/",
+                tostring(SERVER_HOP_CYCLE),
+                "| Target: <10 PLAYER"
+            )
+        elseif #preferredServers > 0 then
+            -- Target <10 tidak tersedia, gunakan 10+ agar hop tetap jalan.
+            pool = preferredServers
+            print(
+                "[SERVER HOP] Cycle:",
+                tostring(cyclePosition),
+                "/",
+                tostring(SERVER_HOP_CYCLE),
+                "| <10 TIDAK TERSEDIA -> FALLBACK 10+"
+            )
+        end
+    end
+
+    if not pool or #pool == 0 then
         warn(
             "[SERVER HOP] Tidak ada server yang tersedia."
         )
-
         return nil
     end
 
@@ -2425,6 +2479,15 @@ local function getNewServer()
                 #pool
             )
         ]
+
+    -- Simpan counter sebelum teleport supaya cycle berlanjut
+    -- setelah script berjalan kembali di server berikutnya.
+    pcall(function()
+        TeleportService:SetTeleportSetting(
+            TELEPORT_SETTING_KEY,
+            hopCount + 1
+        )
+    end)
 
     print(
         "======================================"
@@ -2443,11 +2506,24 @@ local function getNewServer()
     )
 
     print(
+        "[SERVER HOP] Pool size:",
+        tostring(#pool)
+    )
+
+    print(
+        "[SERVER HOP] Cycle:",
+        tostring(cyclePosition),
+        "/",
+        tostring(SERVER_HOP_CYCLE)
+    )
+
+    print(
         "======================================"
     )
 
     return selected.id
 end
+
 
 --==================================================
 -- TELEPORT FAILED HANDLER
