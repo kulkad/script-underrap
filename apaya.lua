@@ -87,6 +87,7 @@ local BOOSTED_ITEMS = {
     ["Supernova Beam"] = true,
     ["Headless Horror"] = true,
     ["Venomsanct"] = true,
+    ["Solaredge Longsword"] = true,
     ["Dual Frost Saber"] = true,
     ["Plasma Blasters"] = true,
     ["Dunestrike Scimitar"] = true,
