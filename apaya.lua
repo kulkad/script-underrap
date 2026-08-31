@@ -72,6 +72,7 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["FROSTWALL"] = true,
     ["Heart Blade"] = true,
     ["Blizzard Slayer"] = true,
     ["Zeus' Lightning"] = true,
