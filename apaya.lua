@@ -421,6 +421,8 @@ local BOOSTED_ITEMS = {
     ["Stellar Blade"] = true,
     ["Souless Katana"] = true,
     ["Shadow Dagger"] = true,
+    ["Firebloom Blade"] = true,
+    ["Pumpkin Blade"] = true,
 }
 
 local BOOSTED_TYPE_EXCLUSIONS = {
