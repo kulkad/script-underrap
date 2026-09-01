@@ -31,19 +31,32 @@ local UNDERRAP_THRESHOLDS = {
 
 local DEEP_UNDERRAP_PERCENT = 50
 
-local DEBUG = true
+local DEBUG = false
 local DUMP_RAW_DATA = false
+
+local SAFE_MODE = true
+local SAFE_SCAN_COOLDOWN_SECONDS = 20
+local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
+local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
 local WEBHOOK_DELAY_SECONDS = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
 local SERVER_HOP_DELAY_SECONDS = 5
+local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
 local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
+
+local lastServerHopAt = 0
+local lastScanAt = 0
+local scanInProgress = false
+local hopInProgress = false
+local hopAttemptCount = 0
 
 --==================================================
 -- WEBHOOKS
@@ -471,6 +484,10 @@ local REQUEST =
     or (syn and syn.request)
 
 local function safeRequest(options, retries)
+    if type(options) ~= "table" then
+        return nil
+    end
+
     retries = retries or 2
 
     for attempt = 1, retries + 1 do
@@ -493,6 +510,14 @@ local function safeRequest(options, retries)
     end
 
     return nil
+end
+
+local function canDoServerHop()
+    return os.clock() - lastServerHopAt >= SERVER_HOP_COOLDOWN_SECONDS
+end
+
+local function canDoScan()
+    return os.clock() - lastScanAt >= SAFE_SCAN_COOLDOWN_SECONDS
 end
 
 --==================================================
@@ -1920,32 +1945,19 @@ local function sendWebhook(
         },
     }
 
-    local success, response =
-        pcall(function()
+    local response = safeRequest({
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json",
+        },
+        Body = HttpService:JSONEncode(payload),
+    }, 1)
 
-            return REQUEST({
-                Url = webhookUrl,
-
-                Method = "POST",
-
-                Headers = {
-                    ["Content-Type"] =
-                        "application/json",
-                },
-
-                Body =
-                    HttpService:JSONEncode(
-                        payload
-                    ),
-            })
-
-        end)
-
-    if not success then
-
+    if not response then
         warn(
             "[WEBHOOK ERROR]",
-            response
+            tostring(webhookType)
         )
 
         return false
@@ -2484,6 +2496,12 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(errorMessage)
         )
 
+        if hopAttemptCount >= SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopInProgress = false
+            return
+        end
+
+        hopAttemptCount += 1
         task.delay(2, function()
             pcall(function()
                 serverHop()
@@ -2506,6 +2524,20 @@ local function serverHop()
 
         return
     end
+
+    if hopInProgress then
+        print("[Server Hop] Hop sedang berjalan, skip.")
+        return
+    end
+
+    if not canDoServerHop() then
+        print(
+            "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
+        )
+        return
+    end
+
+    hopInProgress = true
 
     print(
         "======================================"
@@ -2535,13 +2567,15 @@ local function serverHop()
         getNewServer()
 
     if not serverId then
-
+        hopInProgress = false
         warn(
             "[Server Hop] Tidak menemukan server baru."
         )
 
         return
     end
+
+    lastServerHopAt = os.clock()
 
     print(
         "[Server Hop] Teleport ke:",
@@ -2561,7 +2595,7 @@ local function serverHop()
         end)
 
     if not success then
-
+        hopInProgress = false
         warn(
             "[Server Hop] Teleport gagal:",
             tostring(result)
@@ -2581,6 +2615,19 @@ end
 --==================================================
 
 local function scan()
+
+    if scanInProgress then
+        print("[Scanner] Scan masih berjalan, skip.")
+        return
+    end
+
+    if SAFE_MODE and not canDoScan() then
+        print("[Scanner] Anti-kick cooldown aktif, skip scan.")
+        return
+    end
+
+    scanInProgress = true
+    lastScanAt = os.clock()
 
     print(
         "======================================"
@@ -2768,11 +2815,19 @@ print("======================================")
         for _, listing
             in ipairs(listings) do
 
+            if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                break
+            end
+
             --==========================================
             -- NUKE
             --==========================================
 
             if listing.nuke then
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
 
                 local sent =
                     sendWebhook(
@@ -2795,6 +2850,10 @@ print("======================================")
             --==========================================
 
             if listing.boosted then
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
 
                 local sent =
                     sendWebhook(
@@ -2835,6 +2894,10 @@ print("======================================")
 
                     webhookType =
                         listing.tierName
+                end
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
                 end
 
                 local sent =
@@ -2892,6 +2955,12 @@ print("======================================")
             "[Scanner] Webhook phase selesai."
         )
 
+        if SAFE_MODE then
+            print(
+                "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
+            )
+        end
+
         print(
             "[Scanner] Starting server hop..."
         )
@@ -2904,6 +2973,9 @@ print("======================================")
             "[Server Hop] Disabled."
         )
     end
+
+    hopAttemptCount = 0
+    scanInProgress = false
 end
 
 --==================================================
