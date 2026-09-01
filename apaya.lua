@@ -85,6 +85,7 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Nebula Katana"] = true,
     ["FROSTWALL"] = true,
     ["Empyrean Greatblade"] = true,
     ["Infinite Scythe"] = true,
