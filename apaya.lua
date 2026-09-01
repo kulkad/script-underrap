@@ -423,6 +423,7 @@ local BOOSTED_ITEMS = {
     ["Shadow Dagger"] = true,
     ["Firebloom Blade"] = true,
     ["Pumpkin Blade"] = true,
+    ["Serene Scythe"] = true,
 }
 
 local BOOSTED_TYPE_EXCLUSIONS = {
