@@ -470,6 +470,31 @@ local REQUEST =
     or http_request
     or (syn and syn.request)
 
+local function safeRequest(options, retries)
+    retries = retries or 2
+
+    for attempt = 1, retries + 1 do
+        local success, response = pcall(function()
+            return REQUEST({
+                Url = options.Url,
+                Method = options.Method or "GET",
+                Headers = options.Headers,
+                Body = options.Body,
+            })
+        end)
+
+        if success and response then
+            return response
+        end
+
+        if attempt <= retries then
+            task.wait(0.5 * attempt)
+        end
+    end
+
+    return nil
+end
+
 --==================================================
 -- GET CONTROLLERS
 --==================================================
@@ -2341,20 +2366,10 @@ local function getNewServer()
         tostring(game.PlaceId)
     )
 
-    local success, response = pcall(function()
-        return REQUEST({
-            Url = url,
-            Method = "GET",
-        })
-    end)
-
-    if not success then
-        warn(
-            "[SERVER HOP ERROR]",
-            tostring(response)
-        )
-        return nil
-    end
+    local response = safeRequest({
+        Url = url,
+        Method = "GET",
+    }, 2)
 
     if not response or not response.Body then
         warn(
@@ -2364,14 +2379,13 @@ local function getNewServer()
     end
 
     local decodeSuccess, data = pcall(function()
-        return HttpService:JSONDecode(
-            response.Body
-        )
+        return HttpService:JSONDecode(response.Body)
     end)
 
     if not decodeSuccess
         or not data
         or not data.data
+        or typeof(data.data) ~= "table"
     then
         warn(
             "[SERVER HOP] Data server tidak valid."
@@ -2379,105 +2393,40 @@ local function getNewServer()
         return nil
     end
 
-    --==================================================
-    -- FILTER SERVER
-    --==================================================
-
     local preferredServers = {}
     local fallbackServers = {}
 
     for _, server in ipairs(data.data) do
-
-        if server.id
+        if typeof(server) == "table"
+            and server.id
             and server.id ~= game.JobId
-            and server.playing
-            and server.maxPlayers
-            and server.playing < server.maxPlayers
+            and tonumber(server.playing) ~= nil
+            and tonumber(server.maxPlayers) ~= nil
+            and tonumber(server.playing) < tonumber(server.maxPlayers)
         then
+            local playing = tonumber(server.playing)
+            local maxPlayers = tonumber(server.maxPlayers)
 
-            if server.playing >= MIN_PREFERRED_PLAYERS then
-                table.insert(
-                    preferredServers,
-                    server
-                )
+            if playing >= MIN_PREFERRED_PLAYERS then
+                table.insert(preferredServers, server)
             else
-                table.insert(
-                    fallbackServers,
-                    server
-                )
+                table.insert(fallbackServers, server)
             end
         end
     end
 
-    --==================================================
-    -- 14X SERVER 10+ / 1X SERVER <10
-    --==================================================
+    local pool = nil
 
-    local hopCount = 0
-
-    pcall(function()
-        hopCount =
-            tonumber(
-                TeleportService:GetTeleportSetting(
-                    TELEPORT_SETTING_KEY
-                )
-            )
-            or 0
-    end)
-
-    local cyclePosition =
-        (hopCount % SERVER_HOP_CYCLE) + 1
-
-    local wantPreferred =
-        cyclePosition <= PREFERRED_HOP_COUNT
-
-    local pool
-
-    if wantPreferred then
-
-        if #preferredServers > 0 then
-            pool = preferredServers
-            print(
-                "[SERVER HOP] Cycle:",
-                tostring(cyclePosition),
-                "/",
-                tostring(SERVER_HOP_CYCLE),
-                "| Target: 10+ PLAYER"
-            )
-        elseif #fallbackServers > 0 then
-            -- Target 10+ tidak tersedia, gunakan <10 agar hop tetap jalan.
-            pool = fallbackServers
-            print(
-                "[SERVER HOP] Cycle:",
-                tostring(cyclePosition),
-                "/",
-                tostring(SERVER_HOP_CYCLE),
-                "| 10+ TIDAK TERSEDIA -> FALLBACK <10"
-            )
-        end
-
-    else
-
-        if #fallbackServers > 0 then
-            pool = fallbackServers
-            print(
-                "[SERVER HOP] Cycle:",
-                tostring(cyclePosition),
-                "/",
-                tostring(SERVER_HOP_CYCLE),
-                "| Target: <10 PLAYER"
-            )
-        elseif #preferredServers > 0 then
-            -- Target <10 tidak tersedia, gunakan 10+ agar hop tetap jalan.
-            pool = preferredServers
-            print(
-                "[SERVER HOP] Cycle:",
-                tostring(cyclePosition),
-                "/",
-                tostring(SERVER_HOP_CYCLE),
-                "| <10 TIDAK TERSEDIA -> FALLBACK 10+"
-            )
-        end
+    if #preferredServers > 0 then
+        pool = preferredServers
+        print(
+            "[SERVER HOP] Prioritas: server dengan 10+ player (random dari pool ini)"
+        )
+    elseif #fallbackServers > 0 then
+        pool = fallbackServers
+        print(
+            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan <10 player"
+        )
     end
 
     if not pool or #pool == 0 then
@@ -2487,58 +2436,28 @@ local function getNewServer()
         return nil
     end
 
-    --==================================================
-    -- RANDOM SERVER
-    --==================================================
+    local selected = pool[math.random(1, #pool)]
 
-    local selected =
-        pool[
-            math.random(
-                1,
-                #pool
-            )
-        ]
+    local currentHopCount = 0
+    pcall(function()
+        currentHopCount = tonumber(
+            TeleportService:GetTeleportSetting(TELEPORT_SETTING_KEY)
+        ) or 0
+    end)
 
-    -- Simpan counter sebelum teleport supaya cycle berlanjut
-    -- setelah script berjalan kembali di server berikutnya.
     pcall(function()
         TeleportService:SetTeleportSetting(
             TELEPORT_SETTING_KEY,
-            hopCount + 1
+            tostring(currentHopCount + 1)
         )
     end)
 
-    print(
-        "======================================"
-    )
-
-    print(
-        "[SERVER HOP] Target:",
-        tostring(selected.id)
-    )
-
-    print(
-        "[SERVER HOP] Players:",
-        tostring(selected.playing),
-        "/",
-        tostring(selected.maxPlayers)
-    )
-
-    print(
-        "[SERVER HOP] Pool size:",
-        tostring(#pool)
-    )
-
-    print(
-        "[SERVER HOP] Cycle:",
-        tostring(cyclePosition),
-        "/",
-        tostring(SERVER_HOP_CYCLE)
-    )
-
-    print(
-        "======================================"
-    )
+    print("======================================")
+    print("[SERVER HOP] Target:", tostring(selected.id))
+    print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
+    print("[SERVER HOP] Pool size:", tostring(#pool))
+    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
+    print("======================================")
 
     return selected.id
 end
@@ -2564,6 +2483,12 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(teleportResult),
             tostring(errorMessage)
         )
+
+        task.delay(2, function()
+            pcall(function()
+                serverHop()
+            end)
+        end)
     end
 )
 
@@ -2762,7 +2687,7 @@ print("======================================")
 
     local count = 0
     local detectedCount = 0
-
+    local seenListings = {}
     local groupedListings = {}
 
     --==================================================
@@ -2777,6 +2702,17 @@ print("======================================")
                 in pairs(listings) do
 
                 count += 1
+
+                local itemKey = listing and listing.ItemKey or listing and listing.itemKey or listing and listing.Key or listing and listing.key
+                local itemType = listing and (listing.ItemType or listing.itemType or listing.Type or listing.type or listing.Category or listing.category)
+                local price = listing and (listing.Price or listing.price)
+                local listingSignature = tostring(ownerId) .. ":" .. tostring(listingId) .. ":" .. tostring(itemKey) .. ":" .. tostring(itemType) .. ":" .. tostring(price)
+
+                if seenListings[listingSignature] then
+                    continue
+                end
+
+                seenListings[listingSignature] = true
 
                 local result =
                     inspectListing(
