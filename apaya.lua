@@ -35,14 +35,14 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 20
-local SAFE_HOP_COOLDOWN_SECONDS = 35
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
+local SAFE_SCAN_COOLDOWN_SECONDS = 25
+local SAFE_HOP_COOLDOWN_SECONDS = 40
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 3
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 2
-local WEBHOOK_COOLDOWN_SECONDS = 3
-local WEBHOOK_RETRY_LIMIT = 2
+local WEBHOOK_DELAY_SECONDS = 3
+local WEBHOOK_COOLDOWN_SECONDS = 5
+local WEBHOOK_RETRY_LIMIT = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
@@ -60,8 +60,8 @@ local lastWebhookAt = 0
 local scanInProgress = false
 local hopInProgress = false
 local hopAttemptCount = 0
-
-local WEBHOOKS = WEBHOOKS or {}
+local webhookEscalationTriggered = false
+local webhookFailureCount = 0
 
 --==================================================
 -- WEBHOOKS
@@ -542,8 +542,25 @@ local function waitForWebhookCooldown()
 
     if waitTime > 0 then
         print("[Webhook] Anti-kick delay aktif:", string.format("%.1f detik", waitTime))
+        webhookEscalationTriggered = true
         task.wait(waitTime)
     end
+end
+
+local function shouldEscalateWebhookRisk()
+    if webhookEscalationTriggered then
+        return true
+    end
+
+    if webhookFailureCount >= 2 then
+        return true
+    end
+
+    if lastWebhookAt > 0 and os.clock() - lastWebhookAt < 2 then
+        return true
+    end
+
+    return false
 end
 
 --==================================================
@@ -2000,6 +2017,8 @@ local function sendWebhook(
     end
 
     if not response then
+        webhookFailureCount += 1
+        webhookEscalationTriggered = true
         warn(
             "[WEBHOOK ERROR]",
             tostring(webhookType)
@@ -2009,6 +2028,8 @@ local function sendWebhook(
     end
 
     lastWebhookAt = os.clock()
+    webhookFailureCount = 0
+    webhookEscalationTriggered = false
 
     if DEBUG then
 
@@ -2779,51 +2800,18 @@ local function scan()
         countListings(data)
 
     local boothsByOwnerId = buildBoothIndex()
-    print("======================================")
-print("[BOOTH INDEX] Claimed booths:")
-print("======================================")
 
-for ownerId, boothData in pairs(boothsByOwnerId) do
-    print(
-        "[CLAIMED]",
-        "Owner:",
-        tostring(ownerId),
-        "| Booth:",
-        boothData.booth
-            and boothData.booth:GetFullName()
-            or "nil"
-    )
-end
-
-print("======================================")
+    local claimedBoothCount = 0
+    for _ in pairs(boothsByOwnerId) do
+        claimedBoothCount += 1
+    end
 
     print(
         "[Scanner] Booth listings loaded:",
-        loadedListingCount
+        loadedListingCount,
+        "| Claimed booths:",
+        claimedBoothCount
     )
-    print("======================================")
-print("[LISTING -> BOOTH MATCH TEST]")
-print("======================================")
-
-for ownerId, listings in pairs(data) do
-
-    local boothData =
-        boothsByOwnerId[
-            normalizeId(ownerId)
-        ]
-
-    print(
-        "[OWNER]",
-        tostring(ownerId),
-        "| Booth:",
-        boothData
-            and boothData.booth
-            and boothData.booth:GetFullName()
-            or "NOT FOUND"
-    )
-end
-
-print("======================================")
 
     if loadedListingCount == 0 then
 
@@ -2925,114 +2913,72 @@ print("======================================")
     )
 
     local webhookCount = 0
+    webhookEscalationTriggered = false
+    webhookFailureCount = 0
 
-    for ownerId, listings
-        in pairs(groupedListings) do
+    local prioritizedEntries = {}
 
-        for _, listing
-            in ipairs(listings) do
-
-            if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                break
-            end
-
-            --==========================================
-            -- NUKE
-            --==========================================
+    for ownerId, listings in pairs(groupedListings) do
+        for _, listing in ipairs(listings) do
+            local priority = 99
+            local webhookType = nil
 
             if listing.nuke then
-
-                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                    break
-                end
-
-                local sent =
-                    sendWebhook(
-                        "NUKE",
-                        ownerId,
-                        listing
-                    )
-
-                if sent then
-                    webhookCount += 1
-                end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
-            end
-
-            --==========================================
-            -- BOOSTED
-            --==========================================
-
-            if listing.boosted then
-
-                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                    break
-                end
-
-                local sent =
-                    sendWebhook(
-                        "BOOSTED",
-                        ownerId,
-                        listing
-                    )
-
-                if sent then
-                    webhookCount += 1
-                end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
-            end
-
-            --==========================================
-            -- NORMAL UNDERRAP
-            --==========================================
-
-            if listing.price < listing.rap
-                and listing.discount >=
-                    getUnderrapThreshold(
-                        listing.tierName
-                    )
+                priority = 1
+                webhookType = "NUKE"
+            elseif listing.boosted then
+                priority = 2
+                webhookType = "BOOSTED"
+            elseif listing.price < listing.rap
+                and listing.discount >= getUnderrapThreshold(listing.tierName)
                 and not listing.boosted
                 and not listing.nuke then
 
-                local webhookType
-
+                priority = 3
                 if listing.deepUnderrap then
-
-                    webhookType =
-                        "DEEP_UNDERRAP"
-
+                    webhookType = "DEEP_UNDERRAP"
                 else
-
-                    webhookType =
-                        listing.tierName
+                    webhookType = listing.tierName
                 end
+            end
 
-                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                    break
-                end
-
-                local sent =
-                    sendWebhook(
-                        webhookType,
-                        ownerId,
-                        listing
-                    )
-
-                if sent then
-                    webhookCount += 1
-                end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
+            if webhookType then
+                table.insert(prioritizedEntries, {
+                    ownerId = ownerId,
+                    listing = listing,
+                    webhookType = webhookType,
+                    priority = priority,
+                })
             end
         end
+    end
+
+    table.sort(prioritizedEntries, function(a, b)
+        if a.priority ~= b.priority then
+            return a.priority < b.priority
+        end
+
+        local aName = tostring(a.listing and a.listing.itemName or "")
+        local bName = tostring(b.listing and b.listing.itemName or "")
+        return aName < bName
+    end)
+
+    for _, entry in ipairs(prioritizedEntries) do
+        if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+            break
+        end
+
+        local sent = sendWebhook(entry.webhookType, entry.ownerId, entry.listing)
+
+        if sent then
+            webhookCount += 1
+        end
+
+        if shouldEscalateWebhookRisk() then
+            break
+        end
+
+        task.wait(WEBHOOK_DELAY_SECONDS)
     end
 
     --==================================================
@@ -3061,6 +3007,20 @@ print("======================================")
     print(
         "======================================"
     )
+
+    if shouldEscalateWebhookRisk() or webhookEscalationTriggered then
+        print(
+            "[Webhook] Anti-kick / webhook instability terdeteksi. Force server hop."
+        )
+
+        if ENABLE_SERVER_HOP then
+            serverHop()
+        end
+
+        hopAttemptCount = 0
+        scanInProgress = false
+        return
+    end
 
     --==================================================
     -- SERVER HOP ONLY AFTER WEBHOOK
