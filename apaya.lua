@@ -454,6 +454,7 @@ local NUKE_ITEMS = {
     ["Eternal Piercer"] = 28000,
     ["Love For You"] = 12000,
     ["Winter Wolf"] = 19000,
+    ["Kitty Katana"] = 12600,
     ["Bunny"] = 120000,
     ["Ranked Season 15 Top 50"] = 31000,
     ["Icebound Dominus"] = 28000,
