@@ -63,15 +63,7 @@ local hopAttemptCount = 0
 --==================================================
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
-local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
-    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
-    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
-    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
-    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
-    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
-}
+
 
 --==================================================
 -- MANUAL BOOSTED LIST
@@ -212,6 +204,9 @@ local BOOSTED_ITEMS = {
     ["Wreath Shot"] = true,
     ["Zeus' Revenge"] = true,
     ["2025"] = true,
+    ["Umbra Spear"] = true,
+    ["Event Horizon"] = true,
+    ["Awakened Venomweaver"] = true,
     ["Fortune Cleaver"] = true,
     ["Blizzard Smash"] = true,
     ["Blue Hexplosion"] = true,
@@ -2478,6 +2473,37 @@ local function getNewServer()
     return selected.id
 end
 
+local function directServerHop()
+    if not TeleportService then
+        warn("[SERVER HOP] TeleportService tidak tersedia.")
+        return false
+    end
+
+    local attemptCount = 0
+    local maxAttempts = 2
+
+    while attemptCount < maxAttempts do
+        attemptCount += 1
+
+        local success, result = pcall(function()
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        end)
+
+        if success then
+            lastServerHopAt = os.clock()
+            print("[SERVER HOP] Public server list gagal / kosong; pakai direct teleport ke server acak.")
+            return true
+        end
+
+        warn("[SERVER HOP] Direct teleport gagal (try " .. tostring(attemptCount) .. "/" .. tostring(maxAttempts) .. "):", tostring(result))
+
+        if attemptCount < maxAttempts then
+            task.wait(1.5)
+        end
+    end
+
+    return false
+end
 
 --==================================================
 -- TELEPORT FAILED HANDLER
@@ -2571,9 +2597,32 @@ local function serverHop()
         getNewServer()
 
     if not serverId then
+        warn(
+            "[Server Hop] Tidak menemukan server baru; mencoba fallback teleport."
+        )
+
+        local directSuccess = directServerHop()
+
+        if directSuccess then
+            print(
+                "[Server Hop] Fallback teleport request berhasil."
+            )
+            return
+        end
+
+        if hopAttemptCount < SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopAttemptCount += 1
+            task.delay(2, function()
+                pcall(function()
+                    serverHop()
+                end)
+            end)
+            return
+        end
+
         hopInProgress = false
         warn(
-            "[Server Hop] Tidak menemukan server baru."
+            "[Server Hop] Fallback teleport juga gagal."
         )
 
         return
@@ -2604,6 +2653,15 @@ local function serverHop()
             "[Server Hop] Teleport gagal:",
             tostring(result)
         )
+
+        if hopAttemptCount < SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopAttemptCount += 1
+            task.delay(2, function()
+                pcall(function()
+                    serverHop()
+                end)
+            end)
+        end
 
     else
 
