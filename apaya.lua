@@ -73,6 +73,7 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
     ["FROSTWALL"] = true,
+    ["Empyrean Greatblade"] = true,
     ["Infinite Scythe"] = true,
     ["Elemental Masterblade"] = true,
     ["Kurogin Scythe"] = true,
@@ -442,6 +443,7 @@ local NUKE_ITEMS = {
     ["Regret Blades"] = 19000,
     ["Royal Duality"] = 40000,
     ["Queen Blade"] = 27000,
+    ["Eternum Galepiercer"] = 9400,
     ["Zombie Slide"] = 100000,
 }
 
