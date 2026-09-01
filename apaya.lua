@@ -40,7 +40,9 @@ local SAFE_HOP_COOLDOWN_SECONDS = 35
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 1
+local WEBHOOK_DELAY_SECONDS = 2
+local WEBHOOK_COOLDOWN_SECONDS = 3
+local WEBHOOK_RETRY_LIMIT = 2
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
@@ -54,16 +56,27 @@ local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
 
 local lastServerHopAt = 0
 local lastScanAt = 0
+local lastWebhookAt = 0
 local scanInProgress = false
 local hopInProgress = false
 local hopAttemptCount = 0
+
+local WEBHOOKS = WEBHOOKS or {}
 
 --==================================================
 -- WEBHOOKS
 --==================================================
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
-
+local WEBHOOKS = {
+    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
+    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
+    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
+    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
+    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
+    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
+    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
+}
 
 --==================================================
 -- MANUAL BOOSTED LIST
@@ -517,6 +530,20 @@ end
 
 local function canDoScan()
     return os.clock() - lastScanAt >= SAFE_SCAN_COOLDOWN_SECONDS
+end
+
+local function waitForWebhookCooldown()
+    if not SAFE_MODE then
+        return
+    end
+
+    local elapsed = os.clock() - lastWebhookAt
+    local waitTime = WEBHOOK_COOLDOWN_SECONDS - elapsed
+
+    if waitTime > 0 then
+        print("[Webhook] Anti-kick delay aktif:", string.format("%.1f detik", waitTime))
+        task.wait(waitTime)
+    end
 end
 
 --==================================================
@@ -1944,14 +1971,33 @@ local function sendWebhook(
         },
     }
 
-    local response = safeRequest({
-        Url = webhookUrl,
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json",
-        },
-        Body = HttpService:JSONEncode(payload),
-    }, 1)
+    local response = nil
+    local attempts = 0
+
+    while attempts <= WEBHOOK_RETRY_LIMIT do
+        waitForWebhookCooldown()
+
+        response = safeRequest({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            },
+            Body = HttpService:JSONEncode(payload),
+        }, 1)
+
+        if response then
+            break
+        end
+
+        attempts += 1
+
+        if attempts <= WEBHOOK_RETRY_LIMIT then
+            local backoff = 1.5 * attempts
+            print("[Webhook] Retry webhook:", tostring(webhookType), "setelah", string.format("%.1f detik", backoff))
+            task.wait(backoff)
+        end
+    end
 
     if not response then
         warn(
@@ -1961,6 +2007,8 @@ local function sendWebhook(
 
         return false
     end
+
+    lastWebhookAt = os.clock()
 
     if DEBUG then
 
@@ -2479,6 +2527,11 @@ local function directServerHop()
         return false
     end
 
+    if not LocalPlayer then
+        warn("[SERVER HOP] LocalPlayer tidak tersedia.")
+        return false
+    end
+
     local attemptCount = 0
     local maxAttempts = 2
 
@@ -2491,6 +2544,7 @@ local function directServerHop()
 
         if success then
             lastServerHopAt = os.clock()
+            hopInProgress = false
             print("[SERVER HOP] Public server list gagal / kosong; pakai direct teleport ke server acak.")
             return true
         end
@@ -2502,6 +2556,7 @@ local function directServerHop()
         end
     end
 
+    hopInProgress = false
     return false
 end
 
@@ -2664,7 +2719,7 @@ local function serverHop()
         end
 
     else
-
+        hopInProgress = false
         print(
             "[Server Hop] Teleport request berhasil."
         )
@@ -3044,5 +3099,17 @@ end
 -- RUN
 --==================================================
 
+local function runScannerSafely()
+    local ok, err = xpcall(scan, function(message)
+        scanInProgress = false
+        hopInProgress = false
+        warn("[Scanner] Fatal error terjadi:", tostring(message))
+        return debug.traceback(tostring(message), 2)
+    end)
 
-scan()
+    if not ok then
+        warn("[Scanner] Script dihentikan aman karena error kritis.")
+    end
+end
+
+runScannerSafely()
