@@ -93,6 +93,7 @@ local BOOSTED_ITEMS = {
     ["Tidewither"] = true,
     ["Nebula Katana"] = true,
     ["FROSTWALL"] = true,
+    ["Dual Jolly Fan"] = true,
     ["Empyrean Greatblade"] = true,
     ["Infinite Scythe"] = true,
     ["Elemental Masterblade"] = true,
