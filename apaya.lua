@@ -46,14 +46,11 @@ local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
 local SERVER_HOP_DELAY_SECONDS = 5
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
-local SERVER_API_RETRY_LIMIT = 4
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local ENABLE_SERVER_HOP = true
-local MIN_PREFERRED_PLAYERS = 11
+local MIN_PREFERRED_PLAYERS = 10
 local MAX_PREFERRED_PLAYERS = 25
-local LOW_PLAYER_SERVER_CHANCE = 20
-local MIN_SERVER_FREE_SLOTS = 3
-local ENABLE_REJOIN_ON_NO_SERVER = true
+local MIN_FALLBACK_PLAYERS = 5
+local SERVER_API_MAX_PAGES = 3
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
 local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
@@ -93,7 +90,6 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
-    ["Blackhole Gauntlets"] = true,
     ["Proyection Sorcery Katana"] = true,
     ["Nebula Katana"] = true,
     ["FROSTWALL"] = true,
@@ -509,7 +505,6 @@ local function safeRequest(options, retries)
     end
 
     retries = retries or 2
-    local lastError
 
     for attempt = 1, retries + 1 do
         local success, response = pcall(function()
@@ -523,21 +518,6 @@ local function safeRequest(options, retries)
 
         if success and response then
             return response
-        end
-
-        lastError = success
-            and "request returned nil"
-            or response
-
-        if DEBUG then
-            warn(
-                "[HTTP ERROR]",
-                tostring(options.Method or "GET"),
-                tostring(options.Url),
-                "attempt",
-                tostring(attempt),
-                tostring(lastError)
-            )
         end
 
         if attempt <= retries then
@@ -2411,75 +2391,38 @@ local function getNewServer()
 
     local preferredServers = {}
     local fallbackServers = {}
-
     local cursor = nil
     local pagesRead = 0
 
     repeat
-        local query = string.format(
-            "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
+        local url = string.format(
+            "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
             tostring(game.PlaceId)
         )
 
         if cursor then
-            query = query .. "&cursor=" .. HttpService:UrlEncode(cursor)
+            url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
         end
 
-        local data
-        local lastStatus
-        local lastBody
+        local response = safeRequest({
+            Url = url,
+            Method = "GET",
+        }, 2)
 
-        for attempt = 1, SERVER_API_RETRY_LIMIT do
-            local response = safeRequest({
-                Url = query,
-                Method = "GET",
-                Headers = {
-                    ["Accept"] = "application/json",
-                },
-            }, 1)
-
-            if response then
-                local body = response.Body or response.body
-                lastStatus = response.StatusCode or response.Status
-                lastBody = body
-
-                if typeof(body) == "string" and body ~= "" then
-                    local decodeSuccess, decoded = pcall(function()
-                        return HttpService:JSONDecode(body)
-                    end)
-
-                    if decodeSuccess
-                        and decoded
-                        and typeof(decoded.data) == "table"
-                    then
-                        data = decoded
-                        break
-                    end
-                end
-            end
-
-            warn(
-                "[SERVER HOP] Respons API kosong/tidak valid, retry",
-                tostring(attempt),
-                "/",
-                tostring(SERVER_API_RETRY_LIMIT)
-            )
-
-            if attempt < SERVER_API_RETRY_LIMIT then
-                task.wait(attempt)
-            end
+        if not response or not response.Body then
+            warn("[SERVER HOP] Response kosong.")
+            return nil
         end
 
-        if not data then
-            warn(
-                "[SERVER HOP] API server gagal setelah retry. Status:",
-                tostring(lastStatus)
-            )
+        local decodeSuccess, data = pcall(function()
+            return HttpService:JSONDecode(response.Body)
+        end)
 
-            if DEBUG and lastBody then
-                warn("[SERVER HOP] Body:", string.sub(tostring(lastBody), 1, 300))
-            end
-
+        if not decodeSuccess
+            or not data
+            or typeof(data.data) ~= "table"
+        then
+            warn("[SERVER HOP] Data server tidak valid.")
             return nil
         end
 
@@ -2489,70 +2432,48 @@ local function getNewServer()
             if typeof(server) == "table"
                 and server.id
                 and server.id ~= game.JobId
+                and not blockedServerIds[tostring(server.id)]
                 and tonumber(server.playing) ~= nil
                 and tonumber(server.maxPlayers) ~= nil
-                and tonumber(server.maxPlayers) - tonumber(server.playing)
-                    >= MIN_SERVER_FREE_SLOTS
-                and not blockedServerIds[tostring(server.id)]
+                and tonumber(server.playing) < tonumber(server.maxPlayers)
             then
                 local playing = tonumber(server.playing)
 
                 if playing >= MIN_PREFERRED_PLAYERS
                     and playing <= MAX_PREFERRED_PLAYERS then
                     table.insert(preferredServers, server)
-                elseif playing < 10 then
+                elseif playing >= MIN_FALLBACK_PLAYERS
+                    and playing < MIN_PREFERRED_PLAYERS then
                     table.insert(fallbackServers, server)
                 end
             end
         end
 
         cursor = data.nextPageCursor
-    until not cursor or pagesRead >= 3
+    until not cursor or pagesRead >= SERVER_API_MAX_PAGES
 
-    if DEBUG then
+    local pool = nil
+
+    if #preferredServers > 0 then
+        pool = preferredServers
         print(
-            "[SERVER HOP] Pages:",
-            tostring(pagesRead),
-            "Available:",
-            tostring(#preferredServers + #fallbackServers)
-        )
-    end
-
-    local selected = nil
-
-    local useFallback =
-        #fallbackServers > 0
-        and math.random(1, 100) <= LOW_PLAYER_SERVER_CHANCE
-
-    if #preferredServers > 0 and not useFallback then
-        table.sort(preferredServers, function(a, b)
-            return (tonumber(a.playing) or 0) < (tonumber(b.playing) or 0)
-        end)
-
-        selected = preferredServers[1]
-
-        print(
-            "[SERVER HOP] Target utama: 11-25 player dengan slot kosong terbanyak"
+            "[SERVER HOP] Prioritas: random server 10-25 player"
         )
     elseif #fallbackServers > 0 then
-        table.sort(fallbackServers, function(a, b)
-            return (tonumber(a.playing) or 0) < (tonumber(b.playing) or 0)
-        end)
-
-        selected = fallbackServers[1]
+        pool = fallbackServers
         print(
-            useFallback
-                and "[SERVER HOP] Sesekali memilih server di bawah 10 player"
-                or "[SERVER HOP] Pool 11-25 tidak tersedia; fallback ke server di bawah 10 player"
+            "[SERVER HOP] Pool 10-25 kosong; fallback random server 5-9 player"
         )
     end
 
-    if not selected then
+    if not pool or #pool == 0 then
         warn(
             "[SERVER HOP] Tidak ada server yang tersedia."
         )
         return nil
     end
+
+    local selected = pool[math.random(1, #pool)]
 
     local currentHopCount = 0
     pcall(function()
@@ -2571,6 +2492,7 @@ local function getNewServer()
     print("======================================")
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
+    print("[SERVER HOP] Pool size:", tostring(#pool))
     print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
     print("======================================")
 
@@ -2680,17 +2602,6 @@ serverHop = function()
             "[Server Hop] Tidak menemukan server baru."
         )
 
-        if ENABLE_REJOIN_ON_NO_SERVER then
-            warn("[Server Hop] Mencoba rejoin lewat matchmaking Roblox.")
-            pcall(function()
-                TeleportService:Teleport(
-                    game.PlaceId,
-                    LocalPlayer
-                )
-            end)
-            return
-        end
-
         task.delay(
             SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
             function()
@@ -2725,6 +2636,10 @@ serverHop = function()
     if not success then
         hopInProgress = false
         lastServerHopAt = 0
+        if lastTeleportTargetId then
+            blockedServerIds[lastTeleportTargetId] = true
+            lastTeleportTargetId = nil
+        end
         warn(
             "[Server Hop] Teleport gagal:",
             tostring(result)
@@ -2852,7 +2767,6 @@ print("======================================")
         warn("[Scanner] Tidak ada booth yang termuat; memulai server hop.")
 
         serverHop()
-        scanInProgress = false
         return
     end
 
