@@ -2385,7 +2385,7 @@ local function getNewServer()
     end
 
     local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
+        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
         tostring(game.PlaceId)
     )
 
@@ -2425,16 +2425,19 @@ local function getNewServer()
             and server.id ~= game.JobId
             and tonumber(server.playing) ~= nil
             and tonumber(server.maxPlayers) ~= nil
+            and tonumber(server.playing) >= MIN_PREFERRED_PLAYERS
             and tonumber(server.playing) < tonumber(server.maxPlayers)
         then
-            local playing = tonumber(server.playing)
-            local maxPlayers = tonumber(server.maxPlayers)
-
-            if playing >= MIN_PREFERRED_PLAYERS then
-                table.insert(preferredServers, server)
-            else
-                table.insert(fallbackServers, server)
-            end
+            table.insert(preferredServers, server)
+        elseif typeof(server) == "table"
+            and server.id
+            and server.id ~= game.JobId
+            and tonumber(server.playing) ~= nil
+            and tonumber(server.maxPlayers) ~= nil
+            and tonumber(server.playing) >= 5
+            and tonumber(server.playing) < tonumber(server.maxPlayers)
+        then
+            table.insert(fallbackServers, server)
         end
     end
 
@@ -2448,7 +2451,7 @@ local function getNewServer()
     elseif #fallbackServers > 0 then
         pool = fallbackServers
         print(
-            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan <10 player"
+            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server dengan 5-9 player"
         )
     end
 
