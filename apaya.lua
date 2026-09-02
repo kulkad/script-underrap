@@ -37,7 +37,7 @@ local DUMP_RAW_DATA = false
 local SAFE_MODE = true
 local SAFE_SCAN_COOLDOWN_SECONDS = 25
 local SAFE_HOP_COOLDOWN_SECONDS = 40
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 3
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 8
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
 local WEBHOOK_DELAY_SECONDS = 3
@@ -2926,20 +2926,24 @@ local function scan()
             if listing.nuke then
                 priority = 1
                 webhookType = "NUKE"
-            elseif listing.boosted then
-                priority = 2
-                webhookType = "BOOSTED"
             elseif listing.price < listing.rap
                 and listing.discount >= getUnderrapThreshold(listing.tierName)
                 and not listing.boosted
                 and not listing.nuke then
 
-                priority = 3
+                -- Non-boosted underrap selalu diutamakan.
+                -- Boosted cuma bonus/secondary alert, bukan prioritas utama.
                 if listing.deepUnderrap then
+                    priority = 2
                     webhookType = "DEEP_UNDERRAP"
                 else
+                    priority = 3
                     webhookType = listing.tierName
                 end
+            elseif listing.boosted then
+                -- Boosted paling tidak penting, biar nggak ngeblok tier utama.
+                priority = 99
+                webhookType = "BOOSTED"
             end
 
             if webhookType then
