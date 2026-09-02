@@ -551,16 +551,17 @@ local function waitForWebhookCooldown()
 end
 
 local function shouldEscalateWebhookRisk()
+    -- Jangan langsung force server hop cuma gara-gara 1 webhook gagal.
+    -- Anti-kick harus baru aktif setelah beberapa kegagalan berturut-turut,
+    -- bukan karena cooldown normal atau satu request timeout.
     if webhookEscalationTriggered then
         return true
     end
 
-    if webhookFailureCount >= 2 then
+    if webhookFailureCount >= 3 then
         return true
     end
 
-    -- A normal webhook cooldown is not a webhook failure.
-    -- It should only slow down sending, not trigger immediate anti-kick escalation.
     return false
 end
 
@@ -2019,10 +2020,10 @@ local function sendWebhook(
 
     if not response then
         webhookFailureCount += 1
-        webhookEscalationTriggered = true
         warn(
             "[WEBHOOK ERROR]",
-            tostring(webhookType)
+            tostring(webhookType),
+            "(failure count:", tostring(webhookFailureCount), ")"
         )
 
         return false
@@ -3019,15 +3020,13 @@ local function scan()
         "======================================"
     )
 
-    if shouldEscalateWebhookRisk() or webhookEscalationTriggered then
+    if shouldEscalateWebhookRisk() then
         print(
-            "[Webhook] Anti-kick / webhook instability terdeteksi. Force server hop."
+            "[Webhook] Webhook gagal berulang; skip force hop untuk menjaga stability."
         )
 
-        if ENABLE_SERVER_HOP then
-            serverHop()
-        end
-
+        -- Jaga agar script tidak langsung kena kick hanya karena webhook gagal sesekali.
+        -- Biarkan cooldown / retry normal dulu, tanpa memaksa server hop dari fase webhook.
         hopAttemptCount = 0
         scanInProgress = false
         return
