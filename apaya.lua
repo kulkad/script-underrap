@@ -35,14 +35,14 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 25
-local SAFE_HOP_COOLDOWN_SECONDS = 40
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 8
+local SAFE_SCAN_COOLDOWN_SECONDS = 45
+local SAFE_HOP_COOLDOWN_SECONDS = 75
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 1
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 3
-local WEBHOOK_COOLDOWN_SECONDS = 5
-local WEBHOOK_RETRY_LIMIT = 1
+local WEBHOOK_DELAY_SECONDS = 12
+local WEBHOOK_COOLDOWN_SECONDS = 20
+local WEBHOOK_RETRY_LIMIT = 0
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
@@ -546,7 +546,11 @@ local function waitForWebhookCooldown()
     local waitTime = WEBHOOK_COOLDOWN_SECONDS - elapsed
 
     if waitTime > 0 then
-        print("[Webhook] Anti-kick delay aktif:", string.format("%.1f detik", waitTime))
+        -- Ini bukan kick; ini cuma throttling agar request tidak terlalu cepat.
+        -- Untuk menghindari log yang menimbulkan rasa waspada, tetap diam di mode normal.
+        if DEBUG then
+            print("[Webhook] Throttling delay aktif:", string.format("%.1f detik", waitTime))
+        end
         task.wait(waitTime)
     end
 end
@@ -559,7 +563,7 @@ local function shouldEscalateWebhookRisk()
         return true
     end
 
-    if webhookFailureCount >= 3 then
+    if webhookFailureCount >= 5 then
         return true
     end
 
@@ -3045,8 +3049,11 @@ local function scan()
 
         if SAFE_MODE then
             print(
-                "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
+                "[Scanner] Safe mode aktif: tidak ada server hop langsung setelah webhook agar tidak kena kick."
             )
+            hopAttemptCount = 0
+            scanInProgress = false
+            return
         end
 
         print(
