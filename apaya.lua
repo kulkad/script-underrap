@@ -35,14 +35,14 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 45
-local SAFE_HOP_COOLDOWN_SECONDS = 75
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 1
+local SAFE_SCAN_COOLDOWN_SECONDS = 25
+local SAFE_HOP_COOLDOWN_SECONDS = 40
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 4
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 12
-local WEBHOOK_COOLDOWN_SECONDS = 20
-local WEBHOOK_RETRY_LIMIT = 0
+local WEBHOOK_DELAY_SECONDS = 3
+local WEBHOOK_COOLDOWN_SECONDS = 5
+local WEBHOOK_RETRY_LIMIT = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
@@ -3027,14 +3027,11 @@ local function scan()
 
     if shouldEscalateWebhookRisk() then
         print(
-            "[Webhook] Webhook gagal berulang; skip force hop untuk menjaga stability."
+            "[Webhook] Webhook gagal berulang; tetap lanjut ke server hop dengan cooldown aman."
         )
 
-        -- Jaga agar script tidak langsung kena kick hanya karena webhook gagal sesekali.
-        -- Biarkan cooldown / retry normal dulu, tanpa memaksa server hop dari fase webhook.
         hopAttemptCount = 0
         scanInProgress = false
-        return
     end
 
     --==================================================
@@ -3049,11 +3046,8 @@ local function scan()
 
         if SAFE_MODE then
             print(
-                "[Scanner] Safe mode aktif: tidak ada server hop langsung setelah webhook agar tidak kena kick."
+                "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
             )
-            hopAttemptCount = 0
-            scanInProgress = false
-            return
         end
 
         print(
