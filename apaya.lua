@@ -2425,41 +2425,39 @@ local function getNewServer()
             and server.id ~= game.JobId
             and tonumber(server.playing) ~= nil
             and tonumber(server.maxPlayers) ~= nil
-            and tonumber(server.playing) >= MIN_PREFERRED_PLAYERS
             and tonumber(server.playing) < tonumber(server.maxPlayers)
         then
-            table.insert(preferredServers, server)
-        elseif typeof(server) == "table"
-            and server.id
-            and server.id ~= game.JobId
-            and tonumber(server.playing) ~= nil
-            and tonumber(server.maxPlayers) ~= nil
-            and tonumber(server.playing) >= 5
-            and tonumber(server.playing) < tonumber(server.maxPlayers)
-        then
-            table.insert(fallbackServers, server)
+            local playing = tonumber(server.playing)
+            local maxPlayers = tonumber(server.maxPlayers)
+
+            if playing >= MIN_PREFERRED_PLAYERS then
+                table.insert(preferredServers, server)
+            elseif playing > 5 then
+                table.insert(fallbackServers, server)
+            end
         end
     end
 
-    local pool = nil
+    local pool = preferredServers
+    local poolLabel = "10+ player"
 
-    if #preferredServers > 0 then
-        pool = preferredServers
+    if #preferredServers == 0 then
+        if #fallbackServers > 0 then
+            pool = fallbackServers
+            poolLabel = "5+ player fallback"
+            warn(
+                "[SERVER HOP] Tidak ada server 10+ player; memakai fallback server 5+ player."
+            )
+        else
+            warn(
+                "[SERVER HOP] Tidak ada server dengan 10+ player atau 5+ player yang tersedia; skip teleport."
+            )
+            return nil
+        end
+    else
         print(
             "[SERVER HOP] Prioritas: server dengan 10+ player (random dari pool ini)"
         )
-    elseif #fallbackServers > 0 then
-        pool = fallbackServers
-        print(
-            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server dengan 5-9 player"
-        )
-    end
-
-    if not pool or #pool == 0 then
-        warn(
-            "[SERVER HOP] Tidak ada server yang tersedia."
-        )
-        return nil
     end
 
     local selected = pool[math.random(1, #pool)]
@@ -2482,7 +2480,7 @@ local function getNewServer()
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
     print("[SERVER HOP] Pool size:", tostring(#pool))
-    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
+    print("[SERVER HOP] Pool target:", poolLabel)
     print("======================================")
 
     return selected.id
@@ -2613,33 +2611,10 @@ local function serverHop()
 
     if not serverId then
         warn(
-            "[Server Hop] Tidak menemukan server baru; mencoba fallback teleport."
+            "[Server Hop] Tidak ada server 10+ player yang tersedia; skip hop untuk menghindari server sepi."
         )
-
-        local directSuccess = directServerHop()
-
-        if directSuccess then
-            print(
-                "[Server Hop] Fallback teleport request berhasil."
-            )
-            return
-        end
-
-        if hopAttemptCount < SAFE_SERVER_HOP_RETRY_LIMIT then
-            hopAttemptCount += 1
-            task.delay(2, function()
-                pcall(function()
-                    serverHop()
-                end)
-            end)
-            return
-        end
 
         hopInProgress = false
-        warn(
-            "[Server Hop] Fallback teleport juga gagal."
-        )
-
         return
     end
 
