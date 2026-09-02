@@ -49,7 +49,11 @@ local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local SERVER_API_RETRY_LIMIT = 4
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local ENABLE_SERVER_HOP = true
-local MIN_PREFERRED_PLAYERS = 10
+local MIN_PREFERRED_PLAYERS = 11
+local MAX_PREFERRED_PLAYERS = 25
+local LOW_PLAYER_SERVER_CHANCE = 20
+local MIN_SERVER_FREE_SLOTS = 3
+local ENABLE_REJOIN_ON_NO_SERVER = true
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
 local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
@@ -59,6 +63,8 @@ local lastScanAt = 0
 local scanInProgress = false
 local hopInProgress = false
 local hopAttemptCount = 0
+local blockedServerIds = {}
+local lastTeleportTargetId = nil
 
 --==================================================
 -- WEBHOOKS
@@ -2485,13 +2491,16 @@ local function getNewServer()
                 and server.id ~= game.JobId
                 and tonumber(server.playing) ~= nil
                 and tonumber(server.maxPlayers) ~= nil
-                and tonumber(server.playing) < tonumber(server.maxPlayers)
+                and tonumber(server.maxPlayers) - tonumber(server.playing)
+                    >= MIN_SERVER_FREE_SLOTS
+                and not blockedServerIds[tostring(server.id)]
             then
                 local playing = tonumber(server.playing)
 
-                if playing >= MIN_PREFERRED_PLAYERS then
+                if playing >= MIN_PREFERRED_PLAYERS
+                    and playing <= MAX_PREFERRED_PLAYERS then
                     table.insert(preferredServers, server)
-                else
+                elseif playing < 10 then
                     table.insert(fallbackServers, server)
                 end
             end
@@ -2511,24 +2520,30 @@ local function getNewServer()
 
     local selected = nil
 
-    if #preferredServers > 0 then
+    local useFallback =
+        #fallbackServers > 0
+        and math.random(1, 100) <= LOW_PLAYER_SERVER_CHANCE
+
+    if #preferredServers > 0 and not useFallback then
         table.sort(preferredServers, function(a, b)
-            return (tonumber(a.playing) or 0) > (tonumber(b.playing) or 0)
+            return (tonumber(a.playing) or 0) < (tonumber(b.playing) or 0)
         end)
 
         selected = preferredServers[1]
 
         print(
-            "[SERVER HOP] Prioritas: server 10+ player, dipilih yang paling ramai"
+            "[SERVER HOP] Target utama: 11-25 player dengan slot kosong terbanyak"
         )
     elseif #fallbackServers > 0 then
         table.sort(fallbackServers, function(a, b)
-            return (tonumber(a.playing) or 0) > (tonumber(b.playing) or 0)
+            return (tonumber(a.playing) or 0) < (tonumber(b.playing) or 0)
         end)
 
         selected = fallbackServers[1]
         print(
-            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server dengan player paling ramai yang masih <10"
+            useFallback
+                and "[SERVER HOP] Sesekali memilih server di bawah 10 player"
+                or "[SERVER HOP] Pool 11-25 tidak tersedia; fallback ke server di bawah 10 player"
         )
     end
 
@@ -2559,6 +2574,7 @@ local function getNewServer()
     print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
     print("======================================")
 
+    lastTeleportTargetId = tostring(selected.id)
     return selected.id
 end
 
@@ -2585,6 +2601,11 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(teleportResult),
             tostring(errorMessage)
         )
+
+        if lastTeleportTargetId then
+            blockedServerIds[lastTeleportTargetId] = true
+            lastTeleportTargetId = nil
+        end
 
         hopAttemptCount += 1
         hopInProgress = false
@@ -2658,6 +2679,17 @@ serverHop = function()
         warn(
             "[Server Hop] Tidak menemukan server baru."
         )
+
+        if ENABLE_REJOIN_ON_NO_SERVER then
+            warn("[Server Hop] Mencoba rejoin lewat matchmaking Roblox.")
+            pcall(function()
+                TeleportService:Teleport(
+                    game.PlaceId,
+                    LocalPlayer
+                )
+            end)
+            return
+        end
 
         task.delay(
             SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
