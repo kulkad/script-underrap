@@ -2385,7 +2385,7 @@ local function getNewServer()
     end
 
     local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
+        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
         tostring(game.PlaceId)
     )
 
@@ -2432,32 +2432,31 @@ local function getNewServer()
 
             if playing >= MIN_PREFERRED_PLAYERS then
                 table.insert(preferredServers, server)
-            elseif playing > 5 then
+            else
                 table.insert(fallbackServers, server)
             end
         end
     end
 
-    local pool = preferredServers
-    local poolLabel = "10+ player"
+    local pool = nil
 
-    if #preferredServers == 0 then
-        if #fallbackServers > 0 then
-            pool = fallbackServers
-            poolLabel = "5+ player fallback"
-            warn(
-                "[SERVER HOP] Tidak ada server 10+ player; memakai fallback server 5+ player."
-            )
-        else
-            warn(
-                "[SERVER HOP] Tidak ada server dengan 10+ player atau 5+ player yang tersedia; skip teleport."
-            )
-            return nil
-        end
-    else
+    if #preferredServers > 0 then
+        pool = preferredServers
         print(
             "[SERVER HOP] Prioritas: server dengan 10+ player (random dari pool ini)"
         )
+    elseif #fallbackServers > 0 then
+        pool = fallbackServers
+        print(
+            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan <10 player"
+        )
+    end
+
+    if not pool or #pool == 0 then
+        warn(
+            "[SERVER HOP] Tidak ada server yang tersedia."
+        )
+        return nil
     end
 
     local selected = pool[math.random(1, #pool)]
@@ -2480,43 +2479,12 @@ local function getNewServer()
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
     print("[SERVER HOP] Pool size:", tostring(#pool))
-    print("[SERVER HOP] Pool target:", poolLabel)
+    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
     print("======================================")
 
     return selected.id
 end
 
-local function directServerHop()
-    if not TeleportService then
-        warn("[SERVER HOP] TeleportService tidak tersedia.")
-        return false
-    end
-
-    local attemptCount = 0
-    local maxAttempts = 2
-
-    while attemptCount < maxAttempts do
-        attemptCount += 1
-
-        local success, result = pcall(function()
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        end)
-
-        if success then
-            lastServerHopAt = os.clock()
-            print("[SERVER HOP] Public server list gagal / kosong; pakai direct teleport ke server acak.")
-            return true
-        end
-
-        warn("[SERVER HOP] Direct teleport gagal (try " .. tostring(attemptCount) .. "/" .. tostring(maxAttempts) .. "):", tostring(result))
-
-        if attemptCount < maxAttempts then
-            task.wait(1.5)
-        end
-    end
-
-    return false
-end
 
 --==================================================
 -- TELEPORT FAILED HANDLER
@@ -2610,11 +2578,11 @@ local function serverHop()
         getNewServer()
 
     if not serverId then
+        hopInProgress = false
         warn(
-            "[Server Hop] Tidak ada server 10+ player yang tersedia; skip hop untuk menghindari server sepi."
+            "[Server Hop] Tidak menemukan server baru."
         )
 
-        hopInProgress = false
         return
     end
 
@@ -2643,15 +2611,6 @@ local function serverHop()
             "[Server Hop] Teleport gagal:",
             tostring(result)
         )
-
-        if hopAttemptCount < SAFE_SERVER_HOP_RETRY_LIMIT then
-            hopAttemptCount += 1
-            task.delay(2, function()
-                pcall(function()
-                    serverHop()
-                end)
-            end)
-        end
 
     else
 
