@@ -447,6 +447,7 @@ local BOOSTED_ITEMS = {
     ["Firebloom Blade"] = true,
     ["Pumpkin Blade"] = true,
     ["Serene Scythe"] = true,
+    ["Blazing Azure Talon"] = true,
 }
 
 local BOOSTED_TYPE_EXCLUSIONS = {
@@ -557,10 +558,9 @@ local function shouldEscalateWebhookRisk()
         return true
     end
 
-    if lastWebhookAt > 0 and os.clock() - lastWebhookAt < 2 then
-        return true
-    end
-
+    -- A recent success is not a webhook failure.
+    -- The old check below caused false anti-kick escalation immediately after
+    -- a webhook succeeded, which led to the script hopping right away.
     return false
 end
 
