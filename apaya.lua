@@ -49,6 +49,7 @@ local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 local SERVER_HOP_DELAY_SECONDS = 5
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
+local MIN_ACCEPTABLE_PLAYERS = 5
 local MIN_PREFERRED_PLAYERS = 10
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
@@ -2487,6 +2488,7 @@ local function getNewServer()
             and server.id ~= game.JobId
             and tonumber(server.playing) ~= nil
             and tonumber(server.maxPlayers) ~= nil
+            and tonumber(server.playing) >= MIN_ACCEPTABLE_PLAYERS
             and tonumber(server.playing) < tonumber(server.maxPlayers)
         then
             local playing = tonumber(server.playing)
@@ -2510,13 +2512,13 @@ local function getNewServer()
     elseif #fallbackServers > 0 then
         pool = fallbackServers
         print(
-            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan <10 player"
+            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan 5-9 player"
         )
     end
 
     if not pool or #pool == 0 then
         warn(
-            "[SERVER HOP] Tidak ada server yang tersedia."
+            "[SERVER HOP] Tidak ada server yang aman (>= 5 player)."
         )
         return nil
     end
@@ -2541,7 +2543,7 @@ local function getNewServer()
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
     print("[SERVER HOP] Pool size:", tostring(#pool))
-    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
+    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "5-9 player")
     print("======================================")
 
     return selected.id
