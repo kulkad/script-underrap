@@ -2438,48 +2438,35 @@ local function getNewServer()
         end
     end
 
-    local pool = nil
+    local selected = nil
 
     if #preferredServers > 0 then
         table.sort(preferredServers, function(a, b)
             return (tonumber(a.playing) or 0) > (tonumber(b.playing) or 0)
         end)
 
-        local topPreferredCount = math.max(1, math.ceil(#preferredServers * 0.4))
-        local topPreferredServers = {}
-
-        for i = 1, math.min(#preferredServers, topPreferredCount) do
-            table.insert(topPreferredServers, preferredServers[i])
-        end
-
-        if #topPreferredServers > 0 then
-            pool = topPreferredServers
-        else
-            pool = preferredServers
-        end
+        selected = preferredServers[1]
 
         print(
-            "[SERVER HOP] Prioritas: server 10+ player, dipilih dari yang paling ramai"
+            "[SERVER HOP] Prioritas: server 10+ player, dipilih yang paling ramai"
         )
     elseif #fallbackServers > 0 then
         table.sort(fallbackServers, function(a, b)
             return (tonumber(a.playing) or 0) > (tonumber(b.playing) or 0)
         end)
 
-        pool = fallbackServers
+        selected = fallbackServers[1]
         print(
             "[SERVER HOP] Prioritas tidak tersedia; fallback ke server dengan player paling ramai yang masih <10"
         )
     end
 
-    if not pool or #pool == 0 then
+    if not selected then
         warn(
             "[SERVER HOP] Tidak ada server yang tersedia."
         )
         return nil
     end
-
-    local selected = pool[math.random(1, #pool)]
 
     local currentHopCount = 0
     pcall(function()
