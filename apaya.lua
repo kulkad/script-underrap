@@ -91,6 +91,7 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Proyection Sorcery Katana"] = true,
     ["Nebula Katana"] = true,
     ["FROSTWALL"] = true,
     ["Ranked Season 13 Champion"] = true,
