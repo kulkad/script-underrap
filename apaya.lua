@@ -35,21 +35,18 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 25
-local SAFE_HOP_COOLDOWN_SECONDS = 40
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 4
+local SAFE_SCAN_COOLDOWN_SECONDS = 20
+local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 3
-local WEBHOOK_COOLDOWN_SECONDS = 5
-local WEBHOOK_RETRY_LIMIT = 1
+local WEBHOOK_DELAY_SECONDS = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
 local SERVER_HOP_DELAY_SECONDS = 5
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
-local MIN_ACCEPTABLE_PLAYERS = 5
 local MIN_PREFERRED_PLAYERS = 10
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
@@ -57,27 +54,16 @@ local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
 
 local lastServerHopAt = 0
 local lastScanAt = 0
-local lastWebhookAt = 0
 local scanInProgress = false
 local hopInProgress = false
 local hopAttemptCount = 0
-local webhookEscalationTriggered = false
-local webhookFailureCount = 0
 
 --==================================================
 -- WEBHOOKS
 --==================================================
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
-local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
-    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
-    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
-    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
-    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
-    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
-}
+
 
 --==================================================
 -- MANUAL BOOSTED LIST
@@ -535,39 +521,6 @@ end
 
 local function canDoScan()
     return os.clock() - lastScanAt >= SAFE_SCAN_COOLDOWN_SECONDS
-end
-
-local function waitForWebhookCooldown()
-    if not SAFE_MODE then
-        return
-    end
-
-    local elapsed = os.clock() - lastWebhookAt
-    local waitTime = WEBHOOK_COOLDOWN_SECONDS - elapsed
-
-    if waitTime > 0 then
-        -- Ini bukan kick; ini cuma throttling agar request tidak terlalu cepat.
-        -- Untuk menghindari log yang menimbulkan rasa waspada, tetap diam di mode normal.
-        if DEBUG then
-            print("[Webhook] Throttling delay aktif:", string.format("%.1f detik", waitTime))
-        end
-        task.wait(waitTime)
-    end
-end
-
-local function shouldEscalateWebhookRisk()
-    -- Jangan langsung force server hop cuma gara-gara 1 webhook gagal.
-    -- Anti-kick harus baru aktif setelah beberapa kegagalan berturut-turut,
-    -- bukan karena cooldown normal atau satu request timeout.
-    if webhookEscalationTriggered then
-        return true
-    end
-
-    if webhookFailureCount >= 5 then
-        return true
-    end
-
-    return false
 end
 
 --==================================================
@@ -1995,48 +1948,23 @@ local function sendWebhook(
         },
     }
 
-    local response = nil
-    local attempts = 0
-
-    while attempts <= WEBHOOK_RETRY_LIMIT do
-        waitForWebhookCooldown()
-
-        response = safeRequest({
-            Url = webhookUrl,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-            },
-            Body = HttpService:JSONEncode(payload),
-        }, 1)
-
-        if response then
-            break
-        end
-
-        attempts += 1
-
-        if attempts <= WEBHOOK_RETRY_LIMIT then
-            local backoff = 1.5 * attempts
-            print("[Webhook] Retry webhook:", tostring(webhookType), "setelah", string.format("%.1f detik", backoff))
-            task.wait(backoff)
-        end
-    end
+    local response = safeRequest({
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json",
+        },
+        Body = HttpService:JSONEncode(payload),
+    }, 1)
 
     if not response then
-        webhookFailureCount += 1
         warn(
             "[WEBHOOK ERROR]",
-            tostring(webhookType),
-            "(failure count:", tostring(webhookFailureCount), ")"
+            tostring(webhookType)
         )
 
         return false
     end
-
-    lastWebhookAt = os.clock()
-    webhookFailureCount = 0
-    webhookEscalationTriggered = false
 
     if DEBUG then
 
@@ -2448,13 +2376,8 @@ local function getNewServer()
         return nil
     end
 
-    -- NOTE:
-    -- sortOrder=Asc returns the least populated servers first, which makes
-    -- the script falsely think there are no 10+ player servers available.
-    -- We want the most populated servers first so the preferred pool actually
-    -- contains the high-population servers that the script is trying to target.
     local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
+        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
         tostring(game.PlaceId)
     )
 
@@ -2494,7 +2417,6 @@ local function getNewServer()
             and server.id ~= game.JobId
             and tonumber(server.playing) ~= nil
             and tonumber(server.maxPlayers) ~= nil
-            and tonumber(server.playing) >= MIN_ACCEPTABLE_PLAYERS
             and tonumber(server.playing) < tonumber(server.maxPlayers)
         then
             local playing = tonumber(server.playing)
@@ -2518,13 +2440,13 @@ local function getNewServer()
     elseif #fallbackServers > 0 then
         pool = fallbackServers
         print(
-            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan 5-9 player"
+            "[SERVER HOP] Prioritas tidak tersedia; fallback ke server random dengan <10 player"
         )
     end
 
     if not pool or #pool == 0 then
         warn(
-            "[SERVER HOP] Tidak ada server yang aman (>= 5 player)."
+            "[SERVER HOP] Tidak ada server yang tersedia."
         )
         return nil
     end
@@ -2549,7 +2471,7 @@ local function getNewServer()
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
     print("[SERVER HOP] Pool size:", tostring(#pool))
-    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "5-9 player")
+    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
     print("======================================")
 
     return selected.id
@@ -2558,11 +2480,6 @@ end
 local function directServerHop()
     if not TeleportService then
         warn("[SERVER HOP] TeleportService tidak tersedia.")
-        return false
-    end
-
-    if not LocalPlayer then
-        warn("[SERVER HOP] LocalPlayer tidak tersedia.")
         return false
     end
 
@@ -2578,7 +2495,6 @@ local function directServerHop()
 
         if success then
             lastServerHopAt = os.clock()
-            hopInProgress = false
             print("[SERVER HOP] Public server list gagal / kosong; pakai direct teleport ke server acak.")
             return true
         end
@@ -2590,7 +2506,6 @@ local function directServerHop()
         end
     end
 
-    hopInProgress = false
     return false
 end
 
@@ -2753,7 +2668,7 @@ local function serverHop()
         end
 
     else
-        hopInProgress = false
+
         print(
             "[Server Hop] Teleport request berhasil."
         )
@@ -2813,18 +2728,51 @@ local function scan()
         countListings(data)
 
     local boothsByOwnerId = buildBoothIndex()
+    print("======================================")
+print("[BOOTH INDEX] Claimed booths:")
+print("======================================")
 
-    local claimedBoothCount = 0
-    for _ in pairs(boothsByOwnerId) do
-        claimedBoothCount += 1
-    end
+for ownerId, boothData in pairs(boothsByOwnerId) do
+    print(
+        "[CLAIMED]",
+        "Owner:",
+        tostring(ownerId),
+        "| Booth:",
+        boothData.booth
+            and boothData.booth:GetFullName()
+            or "nil"
+    )
+end
+
+print("======================================")
 
     print(
         "[Scanner] Booth listings loaded:",
-        loadedListingCount,
-        "| Claimed booths:",
-        claimedBoothCount
+        loadedListingCount
     )
+    print("======================================")
+print("[LISTING -> BOOTH MATCH TEST]")
+print("======================================")
+
+for ownerId, listings in pairs(data) do
+
+    local boothData =
+        boothsByOwnerId[
+            normalizeId(ownerId)
+        ]
+
+    print(
+        "[OWNER]",
+        tostring(ownerId),
+        "| Booth:",
+        boothData
+            and boothData.booth
+            and boothData.booth:GetFullName()
+            or "NOT FOUND"
+    )
+end
+
+print("======================================")
 
     if loadedListingCount == 0 then
 
@@ -2926,76 +2874,114 @@ local function scan()
     )
 
     local webhookCount = 0
-    webhookEscalationTriggered = false
-    webhookFailureCount = 0
 
-    local prioritizedEntries = {}
+    for ownerId, listings
+        in pairs(groupedListings) do
 
-    for ownerId, listings in pairs(groupedListings) do
-        for _, listing in ipairs(listings) do
-            local priority = 99
-            local webhookType = nil
+        for _, listing
+            in ipairs(listings) do
+
+            if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                break
+            end
+
+            --==========================================
+            -- NUKE
+            --==========================================
 
             if listing.nuke then
-                priority = 1
-                webhookType = "NUKE"
-            elseif listing.price < listing.rap
-                and listing.discount >= getUnderrapThreshold(listing.tierName)
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        "NUKE",
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
+            end
+
+            --==========================================
+            -- BOOSTED
+            --==========================================
+
+            if listing.boosted then
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        "BOOSTED",
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
+            end
+
+            --==========================================
+            -- NORMAL UNDERRAP
+            --==========================================
+
+            if listing.price < listing.rap
+                and listing.discount >=
+                    getUnderrapThreshold(
+                        listing.tierName
+                    )
                 and not listing.boosted
                 and not listing.nuke then
 
-                -- Non-boosted underrap selalu diutamakan.
-                -- Boosted cuma bonus/secondary alert, bukan prioritas utama.
+                local webhookType
+
                 if listing.deepUnderrap then
-                    priority = 2
-                    webhookType = "DEEP_UNDERRAP"
+
+                    webhookType =
+                        "DEEP_UNDERRAP"
+
                 else
-                    priority = 3
-                    webhookType = listing.tierName
+
+                    webhookType =
+                        listing.tierName
                 end
-            elseif listing.boosted then
-                -- Boosted paling tidak penting, biar nggak ngeblok tier utama.
-                priority = 99
-                webhookType = "BOOSTED"
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        webhookType,
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
             end
-
-            if webhookType then
-                table.insert(prioritizedEntries, {
-                    ownerId = ownerId,
-                    listing = listing,
-                    webhookType = webhookType,
-                    priority = priority,
-                })
-            end
         end
-    end
-
-    table.sort(prioritizedEntries, function(a, b)
-        if a.priority ~= b.priority then
-            return a.priority < b.priority
-        end
-
-        local aName = tostring(a.listing and a.listing.itemName or "")
-        local bName = tostring(b.listing and b.listing.itemName or "")
-        return aName < bName
-    end)
-
-    for _, entry in ipairs(prioritizedEntries) do
-        if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-            break
-        end
-
-        local sent = sendWebhook(entry.webhookType, entry.ownerId, entry.listing)
-
-        if sent then
-            webhookCount += 1
-        end
-
-        if shouldEscalateWebhookRisk() then
-            break
-        end
-
-        task.wait(WEBHOOK_DELAY_SECONDS)
     end
 
     --==================================================
@@ -3024,15 +3010,6 @@ local function scan()
     print(
         "======================================"
     )
-
-    if shouldEscalateWebhookRisk() then
-        print(
-            "[Webhook] Webhook gagal berulang; tetap lanjut ke server hop dengan cooldown aman."
-        )
-
-        hopAttemptCount = 0
-        scanInProgress = false
-    end
 
     --==================================================
     -- SERVER HOP ONLY AFTER WEBHOOK
@@ -3071,17 +3048,5 @@ end
 -- RUN
 --==================================================
 
-local function runScannerSafely()
-    local ok, err = xpcall(scan, function(message)
-        scanInProgress = false
-        hopInProgress = false
-        warn("[Scanner] Fatal error terjadi:", tostring(message))
-        return debug.traceback(tostring(message), 2)
-    end)
 
-    if not ok then
-        warn("[Scanner] Script dihentikan aman karena error kritis.")
-    end
-end
-
-runScannerSafely()
+scan()
