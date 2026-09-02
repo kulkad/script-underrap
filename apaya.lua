@@ -85,6 +85,7 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Blackhole Gauntlets"] = true,
     ["Proyection Sorcery Katana"] = true,
     ["Nebula Katana"] = true,
     ["FROSTWALL"] = true,
@@ -500,6 +501,7 @@ local function safeRequest(options, retries)
     end
 
     retries = retries or 2
+    local lastError
 
     for attempt = 1, retries + 1 do
         local success, response = pcall(function()
@@ -513,6 +515,21 @@ local function safeRequest(options, retries)
 
         if success and response then
             return response
+        end
+
+        lastError = success
+            and "request returned nil"
+            or response
+
+        if DEBUG then
+            warn(
+                "[HTTP ERROR]",
+                tostring(options.Method or "GET"),
+                tostring(options.Url),
+                "attempt",
+                tostring(attempt),
+                tostring(lastError)
+            )
         end
 
         if attempt <= retries then
@@ -2384,58 +2401,93 @@ local function getNewServer()
         return nil
     end
 
-    local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
-        tostring(game.PlaceId)
-    )
-
-    local response = safeRequest({
-        Url = url,
-        Method = "GET",
-    }, 2)
-
-    if not response or not response.Body then
-        warn(
-            "[SERVER HOP] Response kosong."
-        )
-        return nil
-    end
-
-    local decodeSuccess, data = pcall(function()
-        return HttpService:JSONDecode(response.Body)
-    end)
-
-    if not decodeSuccess
-        or not data
-        or not data.data
-        or typeof(data.data) ~= "table"
-    then
-        warn(
-            "[SERVER HOP] Data server tidak valid."
-        )
-        return nil
-    end
-
     local preferredServers = {}
     local fallbackServers = {}
 
-    for _, server in ipairs(data.data) do
-        if typeof(server) == "table"
-            and server.id
-            and server.id ~= game.JobId
-            and tonumber(server.playing) ~= nil
-            and tonumber(server.maxPlayers) ~= nil
-            and tonumber(server.playing) < tonumber(server.maxPlayers)
-        then
-            local playing = tonumber(server.playing)
-            local maxPlayers = tonumber(server.maxPlayers)
+    local cursor = nil
+    local pagesRead = 0
 
-            if playing >= MIN_PREFERRED_PLAYERS then
-                table.insert(preferredServers, server)
-            else
-                table.insert(fallbackServers, server)
+    repeat
+        local query = string.format(
+            "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
+            tostring(game.PlaceId)
+        )
+
+        if cursor then
+            query = query .. "&cursor=" .. HttpService:UrlEncode(cursor)
+        end
+
+        local response = safeRequest({
+            Url = query,
+            Method = "GET",
+            Headers = {
+                ["Accept"] = "application/json",
+            },
+        }, 2)
+
+        if not response then
+            warn("[SERVER HOP] Request server API gagal setelah retry.")
+            return nil
+        end
+
+        if not response.Body or response.Body == "" then
+            warn(
+                "[SERVER HOP] Body API kosong. Status:",
+                tostring(response.StatusCode or response.Status)
+            )
+            return nil
+        end
+
+        local decodeSuccess, data = pcall(function()
+            return HttpService:JSONDecode(response.Body)
+        end)
+
+        if not decodeSuccess
+            or not data
+            or typeof(data.data) ~= "table"
+        then
+            warn(
+                "[SERVER HOP] Data server tidak valid. Status:",
+                tostring(response.StatusCode or response.Status)
+            )
+
+            if DEBUG then
+                warn("[SERVER HOP] Body:", string.sub(tostring(response.Body), 1, 300))
+            end
+
+            return nil
+        end
+
+        pagesRead += 1
+
+        for _, server in ipairs(data.data) do
+            if typeof(server) == "table"
+                and server.id
+                and server.id ~= game.JobId
+                and tonumber(server.playing) ~= nil
+                and tonumber(server.maxPlayers) ~= nil
+                and tonumber(server.playing) < tonumber(server.maxPlayers)
+            then
+                local playing = tonumber(server.playing)
+
+                if playing >= MIN_PREFERRED_PLAYERS then
+                    table.insert(preferredServers, server)
+                else
+                    table.insert(fallbackServers, server)
+                end
             end
         end
+
+        cursor = data.nextPageCursor
+    until not cursor or pagesRead >= 3
+
+    if DEBUG then
+        print(
+            "[SERVER HOP] Pages:",
+            tostring(pagesRead),
+            "Available:",
+            tostring(#preferredServers + #fallbackServers)
+        )
     end
 
     local selected = nil
@@ -2496,6 +2548,8 @@ end
 -- TELEPORT FAILED HANDLER
 --==================================================
 
+local serverHop
+
 TeleportService.TeleportInitFailed:Connect(
     function(
         player,
@@ -2531,7 +2585,7 @@ TeleportService.TeleportInitFailed:Connect(
 -- SERVER HOP
 --==================================================
 
-local function serverHop()
+serverHop = function()
 
     if not ENABLE_SERVER_HOP then
 
