@@ -93,6 +93,7 @@ local BOOSTED_ITEMS = {
     ["Tidewither"] = true,
     ["Nebula Katana"] = true,
     ["FROSTWALL"] = true,
+    ["Ranked Season 13 Champion"] = true,
     ["Dual Jolly Fan"] = true,
     ["Empyrean Greatblade"] = true,
     ["Infinite Scythe"] = true,
