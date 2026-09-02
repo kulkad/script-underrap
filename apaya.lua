@@ -544,7 +544,6 @@ local function waitForWebhookCooldown()
 
     if waitTime > 0 then
         print("[Webhook] Anti-kick delay aktif:", string.format("%.1f detik", waitTime))
-        webhookEscalationTriggered = true
         task.wait(waitTime)
     end
 end
@@ -558,9 +557,8 @@ local function shouldEscalateWebhookRisk()
         return true
     end
 
-    -- A recent success is not a webhook failure.
-    -- The old check below caused false anti-kick escalation immediately after
-    -- a webhook succeeded, which led to the script hopping right away.
+    -- A normal webhook cooldown is not a webhook failure.
+    -- It should only slow down sending, not trigger immediate anti-kick escalation.
     return false
 end
 
