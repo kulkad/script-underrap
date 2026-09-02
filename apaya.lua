@@ -2441,8 +2441,13 @@ local function getNewServer()
         return nil
     end
 
+    -- NOTE:
+    -- sortOrder=Asc returns the least populated servers first, which makes
+    -- the script falsely think there are no 10+ player servers available.
+    -- We want the most populated servers first so the preferred pool actually
+    -- contains the high-population servers that the script is trying to target.
     local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
+        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Desc&limit=100",
         tostring(game.PlaceId)
     )
 
