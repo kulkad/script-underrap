@@ -46,6 +46,8 @@ local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
 local SERVER_HOP_DELAY_SECONDS = 5
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
+local SERVER_API_RETRY_LIMIT = 4
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
 local SERVER_HOP_CYCLE = 15
@@ -2417,42 +2419,59 @@ local function getNewServer()
             query = query .. "&cursor=" .. HttpService:UrlEncode(cursor)
         end
 
-        local response = safeRequest({
-            Url = query,
-            Method = "GET",
-            Headers = {
-                ["Accept"] = "application/json",
-            },
-        }, 2)
+        local data
+        local lastStatus
+        local lastBody
 
-        if not response then
-            warn("[SERVER HOP] Request server API gagal setelah retry.")
-            return nil
+        for attempt = 1, SERVER_API_RETRY_LIMIT do
+            local response = safeRequest({
+                Url = query,
+                Method = "GET",
+                Headers = {
+                    ["Accept"] = "application/json",
+                },
+            }, 1)
+
+            if response then
+                local body = response.Body or response.body
+                lastStatus = response.StatusCode or response.Status
+                lastBody = body
+
+                if typeof(body) == "string" and body ~= "" then
+                    local decodeSuccess, decoded = pcall(function()
+                        return HttpService:JSONDecode(body)
+                    end)
+
+                    if decodeSuccess
+                        and decoded
+                        and typeof(decoded.data) == "table"
+                    then
+                        data = decoded
+                        break
+                    end
+                end
+            end
+
+            warn(
+                "[SERVER HOP] Respons API kosong/tidak valid, retry",
+                tostring(attempt),
+                "/",
+                tostring(SERVER_API_RETRY_LIMIT)
+            )
+
+            if attempt < SERVER_API_RETRY_LIMIT then
+                task.wait(attempt)
+            end
         end
 
-        if not response.Body or response.Body == "" then
+        if not data then
             warn(
-                "[SERVER HOP] Body API kosong. Status:",
-                tostring(response.StatusCode or response.Status)
-            )
-            return nil
-        end
-
-        local decodeSuccess, data = pcall(function()
-            return HttpService:JSONDecode(response.Body)
-        end)
-
-        if not decodeSuccess
-            or not data
-            or typeof(data.data) ~= "table"
-        then
-            warn(
-                "[SERVER HOP] Data server tidak valid. Status:",
-                tostring(response.StatusCode or response.Status)
+                "[SERVER HOP] API server gagal setelah retry. Status:",
+                tostring(lastStatus)
             )
 
-            if DEBUG then
-                warn("[SERVER HOP] Body:", string.sub(tostring(response.Body), 1, 300))
+            if DEBUG and lastBody then
+                warn("[SERVER HOP] Body:", string.sub(tostring(lastBody), 1, 300))
             end
 
             return nil
@@ -2567,12 +2586,9 @@ TeleportService.TeleportInitFailed:Connect(
             tostring(errorMessage)
         )
 
-        if hopAttemptCount >= SAFE_SERVER_HOP_RETRY_LIMIT then
-            hopInProgress = false
-            return
-        end
-
         hopAttemptCount += 1
+        hopInProgress = false
+        lastServerHopAt = 0
         task.delay(2, function()
             pcall(function()
                 serverHop()
@@ -2643,6 +2659,15 @@ serverHop = function()
             "[Server Hop] Tidak menemukan server baru."
         )
 
+        task.delay(
+            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            function()
+                if not hopInProgress then
+                    serverHop()
+                end
+            end
+        )
+
         return
     end
 
@@ -2667,9 +2692,19 @@ serverHop = function()
 
     if not success then
         hopInProgress = false
+        lastServerHopAt = 0
         warn(
             "[Server Hop] Teleport gagal:",
             tostring(result)
+        )
+
+        task.delay(
+            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            function()
+                if not hopInProgress then
+                    serverHop()
+                end
+            end
         )
 
     else
@@ -2726,6 +2761,7 @@ local function scan()
         )
 
         serverHop()
+        scanInProgress = false
         return
     end
 
@@ -2784,6 +2820,7 @@ print("======================================")
         warn("[Scanner] Tidak ada booth yang termuat; memulai server hop.")
 
         serverHop()
+        scanInProgress = false
         return
     end
 
