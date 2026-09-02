@@ -2485,7 +2485,6 @@ local function getNewServer()
     print("======================================")
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
-    print("[SERVER HOP] Pool size:", tostring(#pool))
     print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
     print("======================================")
 
