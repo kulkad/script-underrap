@@ -62,6 +62,7 @@ local hopInProgress = false
 local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
+local preparedServerId = nil
 
 --==================================================
 -- WEBHOOKS
@@ -2552,7 +2553,7 @@ TeleportService.TeleportInitFailed:Connect(
 -- SERVER HOP
 --==================================================
 
-serverHop = function()
+serverHop = function(serverId)
 
     if not ENABLE_SERVER_HOP then
 
@@ -2585,24 +2586,31 @@ serverHop = function()
         "[Server Hop] Semua webhook sudah dikirim."
     )
 
-    print(
-        "[Server Hop] Menunggu "
-        .. tostring(
-            SERVER_HOP_DELAY_SECONDS
+    if not serverId then
+        print(
+            "[Server Hop] Menunggu "
+            .. tostring(
+                SERVER_HOP_DELAY_SECONDS
+            )
+            .. " detik..."
         )
-        .. " detik..."
-    )
+    end
 
     print(
         "======================================"
     )
 
-    task.wait(
-        SERVER_HOP_DELAY_SECONDS
-    )
+    if not serverId then
+        task.wait(
+            SERVER_HOP_DELAY_SECONDS
+        )
 
-    local serverId =
-        getNewServer()
+        serverId = getNewServer()
+    else
+        print(
+            "[Server Hop] Target sudah disiapkan saat webhook phase."
+        )
+    end
 
     if not serverId then
         hopInProgress = false
@@ -2871,6 +2879,16 @@ print("======================================")
 
     local webhookCount = 0
 
+    if ENABLE_SERVER_HOP
+        and canDoServerHop() then
+
+        print(
+            "[Webhook] Menyiapkan target server sebelum webhook dikirim..."
+        )
+
+        preparedServerId = getNewServer()
+    end
+
     for ownerId, listings
         in pairs(groupedListings) do
 
@@ -3027,7 +3045,8 @@ print("======================================")
             "[Scanner] Starting server hop..."
         )
 
-        serverHop()
+        serverHop(preparedServerId)
+        preparedServerId = nil
 
     else
 
