@@ -96,6 +96,7 @@ local BOOSTED_ITEMS = {
     ["Dawnpiercer"] = true,
     ["Ocean Surfer"] = true,
     ["Knighthood"] = true,
+    ["Onyx Katana"] = true,
     ["Pastel Spear"] = true,
     ["Nature Cards"] = true,
     ["Solar Saber"] = true,
