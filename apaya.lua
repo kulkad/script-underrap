@@ -45,6 +45,7 @@ local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
 local SERVER_HOP_DELAY_SECONDS = 5
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -2389,7 +2390,7 @@ end
 -- SERVER API
 --==================================================
 
-local function getNewServer()
+local function getNewServerOnce()
 
     if not REQUEST then
         warn(
@@ -2507,6 +2508,32 @@ local function getNewServer()
 
     lastTeleportTargetId = tostring(selected.id)
     return selected.id
+end
+
+local function getNewServer()
+    for attempt = 1, SAFE_SERVER_HOP_RETRY_LIMIT + 1 do
+        local serverId = getNewServerOnce()
+
+        if serverId then
+            return serverId
+        end
+
+        if attempt <= SAFE_SERVER_HOP_RETRY_LIMIT then
+            warn(
+                "[SERVER HOP] Mencari server lagi (percobaan "
+                .. tostring(attempt + 1)
+                .. "/"
+                .. tostring(SAFE_SERVER_HOP_RETRY_LIMIT + 1)
+                .. ")."
+            )
+
+            task.wait(
+                SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS
+            )
+        end
+    end
+
+    return nil
 end
 
 
