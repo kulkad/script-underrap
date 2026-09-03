@@ -40,22 +40,11 @@ local SAFE_HOP_COOLDOWN_SECONDS = 35
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local AUTO_BUY_ENABLED = true
-local AUTO_BUY_ITEMS = {
-    ["Eternal Piercer"] = 25000,
-    ["Queen Blade"] = 22000,
-    ["Royal Duality"] = 35000,
-    ["Bunny"] = 100000,
-    ["Jackolantern"] = 15500,
-}
-
 local WEBHOOK_DELAY_SECONDS = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
-local AUTO_BUY_DELAY_SECONDS = 1
 
 local SERVER_HOP_DELAY_SECONDS = 5
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 5
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -1681,57 +1670,6 @@ local function getNukeLimit(itemType, itemName)
     return nil
 end
 
-local function isAutoBuyEligible(itemType, itemName, price, isUnderrap)
-    if not AUTO_BUY_ENABLED
-        or itemType ~= "Sword"
-        or not isUnderrap then
-        return false
-    end
-
-    local maxBuyPrice = AUTO_BUY_ITEMS[itemName]
-
-    return typeof(maxBuyPrice) == "number"
-        and typeof(price) == "number"
-        and price <= maxBuyPrice
-end
-
-local function purchaseListing(ownerId, listing)
-    if not listing
-        or not listing.autoBuyEligible
-        or listing.listingId == nil then
-        return false
-    end
-
-    local success, result = pcall(function()
-        return BoothController:PurchaseListing(
-            ownerId,
-            listing.listingId
-        )
-    end)
-
-    if not success then
-        warn(
-            "[AUTO BUY] Purchase gagal:",
-            tostring(listing.itemName),
-            tostring(result)
-        )
-        return false
-    end
-
-    print(
-        "[AUTO BUY] Purchase request terkirim:",
-        tostring(listing.itemName),
-        "| Price:",
-        tostring(listing.price),
-        "| Owner:",
-        tostring(ownerId),
-        "| Listing:",
-        tostring(listing.listingId)
-    )
-
-    return true
-end
-
 --==================================================
 -- COLORS
 --==================================================
@@ -2334,13 +2272,6 @@ local function inspectListing(
                 tierName
             )
 
-    local autoBuyEligible = isAutoBuyEligible(
-        itemType,
-        itemName,
-        price,
-        isUnderrap
-    )
-
     local boosted =
         boostedCandidate
         and isUnderrap
@@ -2421,8 +2352,6 @@ local function inspectListing(
         or isNuke then
 
         return {
-            listingId = listingId,
-
             itemName = itemName,
 
             -- PENTING:
@@ -2448,8 +2377,6 @@ local function inspectListing(
 
             deepUnderrap =
                 isDeepUnderrap,
-
-            autoBuyEligible = autoBuyEligible,
 
             boothClaimed = boothMetadata.claimed,
             boothLocation = boothMetadata.location,
@@ -2907,17 +2834,6 @@ print("======================================")
                 if result then
 
                     detectedCount += 1
-
-                    purchaseListing(
-                        ownerId,
-                        result
-                    )
-
-                    if result.autoBuyEligible then
-                        task.wait(
-                            AUTO_BUY_DELAY_SECONDS
-                        )
-                    end
 
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
