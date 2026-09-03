@@ -70,15 +70,7 @@ local preparedServerId = nil
 --==================================================
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
-local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
-    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
-    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
-    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
-    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
-    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
-}
+
 
 --==================================================
 -- MANUAL BOOSTED LIST
@@ -521,7 +513,7 @@ local REQUEST =
     or (syn and syn.request)
 
 local function safeRequest(options, retries)
-    if type(options) ~= "table" then
+    if type(options) ~= "table" or not REQUEST then
         return nil
     end
 
@@ -538,7 +530,17 @@ local function safeRequest(options, retries)
         end)
 
         if success and response then
-            return response
+            local statusCode = tonumber(response.StatusCode)
+
+            if not statusCode
+                or (statusCode >= 200 and statusCode < 300)
+                or (statusCode < 500 and statusCode ~= 429) then
+                return response
+            end
+
+            if attempt > retries then
+                return response
+            end
         end
 
         if attempt <= retries then
@@ -547,6 +549,14 @@ local function safeRequest(options, retries)
     end
 
     return nil
+end
+
+local function getResponseBody(response)
+    if type(response) ~= "table" then
+        return nil
+    end
+
+    return response.Body or response.body
 end
 
 local function canDoServerHop()
@@ -2432,22 +2442,41 @@ local function getNewServerOnce()
         local response = safeRequest({
             Url = url,
             Method = "GET",
+            Headers = {
+                ["Accept"] = "application/json",
+            },
         }, 2)
 
-        if not response or not response.Body then
+        local responseBody = getResponseBody(response)
+
+        if not responseBody then
             warn("[SERVER HOP] Response kosong.")
             return nil
         end
 
+        local statusCode = tonumber(response.StatusCode)
+
+        if statusCode and (statusCode < 200 or statusCode >= 300) then
+            warn(
+                "[SERVER HOP] API HTTP error:",
+                tostring(statusCode),
+                tostring(responseBody):sub(1, 300)
+            )
+            return nil
+        end
+
         local decodeSuccess, data = pcall(function()
-            return HttpService:JSONDecode(response.Body)
+            return HttpService:JSONDecode(responseBody)
         end)
 
         if not decodeSuccess
             or not data
             or typeof(data.data) ~= "table"
         then
-            warn("[SERVER HOP] Data server tidak valid.")
+            warn(
+                "[SERVER HOP] Data server tidak valid:",
+                tostring(responseBody):sub(1, 300)
+            )
             return nil
         end
 
@@ -2583,6 +2612,15 @@ TeleportService.TeleportInitFailed:Connect(
         hopAttemptCount += 1
         hopInProgress = false
         lastServerHopAt = 0
+
+        if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopAttemptCount = 0
+            warn(
+                "[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya."
+            )
+            return
+        end
+
         task.delay(2, function()
             pcall(function()
                 serverHop()
@@ -2611,7 +2649,7 @@ serverHop = function(serverId)
         return
     end
 
-    if not canDoServerHop() then
+    if not serverId and not canDoServerHop() then
         print(
             "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
         )
@@ -2694,10 +2732,21 @@ serverHop = function(serverId)
     if not success then
         hopInProgress = false
         lastServerHopAt = 0
+        preparedServerId = nil
         if lastTeleportTargetId then
             blockedServerIds[lastTeleportTargetId] = true
             lastTeleportTargetId = nil
         end
+
+        hopAttemptCount += 1
+        if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopAttemptCount = 0
+            warn(
+                "[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya."
+            )
+            return
+        end
+
         warn(
             "[Server Hop] Teleport gagal:",
             tostring(result)
@@ -2825,6 +2874,7 @@ print("======================================")
         warn("[Scanner] Tidak ada booth yang termuat; memulai server hop.")
 
         serverHop()
+        scanInProgress = false
         return
     end
 
@@ -2920,16 +2970,6 @@ print("======================================")
     )
 
     local webhookCount = 0
-
-    if ENABLE_SERVER_HOP
-        and canDoServerHop() then
-
-        print(
-            "[Webhook] Menyiapkan target server sebelum webhook dikirim..."
-        )
-
-        preparedServerId = getNewServer()
-    end
 
     for ownerId, listings
         in pairs(groupedListings) do
@@ -3087,8 +3127,8 @@ print("======================================")
             "[Scanner] Starting server hop..."
         )
 
-        serverHop(preparedServerId)
         preparedServerId = nil
+        serverHop()
 
     else
 
