@@ -2253,7 +2253,7 @@ local function inspectListing(
     -- SPECIAL CHECK
     --==================================================
 
-    local boosted =
+    local boostedCandidate =
         isBoosted(
             itemType,
             itemName
@@ -2271,6 +2271,10 @@ local function inspectListing(
             getUnderrapThreshold(
                 tierName
             )
+
+    local boosted =
+        boostedCandidate
+        and isUnderrap
 
     local isDeepUnderrap =
     isUnderrap
