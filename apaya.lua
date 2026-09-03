@@ -94,6 +94,7 @@ local BOOSTED_ITEMS = {
     ["Tidewither"] = true,
     ["Ranked Season 6 Top 50"] = true,
     ["Dawnpiercer"] = true,
+    ["Ocean Surfer"] = true,
     ["Knighthood"] = true,
     ["Pastel Spear"] = true,
     ["Nature Cards"] = true,
