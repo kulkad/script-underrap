@@ -44,7 +44,7 @@ local WEBHOOK_DELAY_SECONDS = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
-local SERVER_HOP_DELAY_SECONDS = 5
+local SERVER_HOP_DELAY_SECONDS = 0
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
@@ -79,7 +79,6 @@ local WEBHOOKS = {
     NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
     DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
 }
-
 
 --==================================================
 -- MANUAL BOOSTED LIST
@@ -1736,8 +1735,11 @@ local function sendWebhook(
     listing
 )
 
-    local webhookUrl =
-        WEBHOOKS[webhookType]
+    local webhookUrl
+
+    if type(WEBHOOKS) == "table" then
+        webhookUrl = WEBHOOKS[webhookType]
+    end
 
     if not webhookUrl
         or webhookUrl == ""
@@ -2977,6 +2979,12 @@ print("======================================")
     print(
         "======================================"
     )
+
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
 
     local webhookCount = 0
 
