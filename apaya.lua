@@ -92,6 +92,7 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Primordial Lance"] = true,
     ["Ranked Season 6 Top 50"] = true,
     ["Dawnpiercer"] = true,
     ["Ocean Surfer"] = true,
