@@ -35,8 +35,10 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 20
-local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_SCAN_COOLDOWN_MIN = 20
+local SAFE_SCAN_COOLDOWN_MAX = 35
+local SAFE_HOP_COOLDOWN_MIN = 30
+local SAFE_HOP_COOLDOWN_MAX = 50
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
@@ -725,11 +727,13 @@ local function getResponseBody(response)
 end
 
 local function canDoServerHop()
-    return os.clock() - lastServerHopAt >= SERVER_HOP_COOLDOWN_SECONDS
+    local cooldown = randomDelay(SAFE_HOP_COOLDOWN_MIN, SAFE_HOP_COOLDOWN_MAX)
+    return os.clock() - lastServerHopAt >= cooldown
 end
 
 local function canDoScan()
-    return os.clock() - lastScanAt >= SAFE_SCAN_COOLDOWN_SECONDS
+    local cooldown = randomDelay(SAFE_SCAN_COOLDOWN_MIN, SAFE_SCAN_COOLDOWN_MAX)
+    return os.clock() - lastScanAt >= cooldown
 end
 
 --==================================================
@@ -2092,6 +2096,7 @@ end
 --==================================================
 
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
+    task.wait(randomDelay(0.5, 1.5))
     if not AUTO_BUY_ENABLED then return false end
     if price > maxPrice then
         print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
@@ -2120,41 +2125,21 @@ end
 -- WEBHOOK
 --==================================================
 
-local function sendWebhook(
-    webhookType,
-    ownerId,
-    listing
-)
-
-    local webhookUrl
-
-    if type(WEBHOOKS) == "table" then
-        webhookUrl = WEBHOOKS[webhookType]
-    end
-
-    if not webhookUrl
-        or webhookUrl == ""
-        or string.find(
-            webhookUrl,
-            "PASTE_"
-        ) then
-
-        warn(
-            "[WEBHOOK] URL belum diisi:",
-            webhookType
-        )
-
+local function sendWebhook(webhookType, ownerId, listing)
+    local webhookUrl = WEBHOOKS[webhookType]
+    if not webhookUrl or webhookUrl == "" or string.find(webhookUrl, "PASTE_") then
+        warn("[WEBHOOK] URL belum diisi:", webhookType)
         return false
     end
-
     if not REQUEST then
-
-        warn(
-            "[WEBHOOK] Request function tidak tersedia."
-        )
-
+        warn("[WEBHOOK] Request function tidak tersedia.")
         return false
     end
+
+    -- ✅ Tambahkan delay acak di sini
+    task.wait(randomDelay(1.5, 3.5))
+
+    -- ... sisanya tetap sama
 
     local ownerInfo =
         getOwnerInfo(ownerId)
@@ -3152,6 +3137,9 @@ serverHop = function(serverId)
         tostring(serverId)
     )
 
+    -- Delay acak sebelum teleport (2 - 5 detik)
+task.wait(randomDelay(2, 5))
+
     local success, result =
         pcall(function()
 
@@ -3454,9 +3442,7 @@ print("======================================")
                     webhookCount += 1
                 end
 
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
+                task.wait(randomDelay(1.5, 3.5))
             end
 
             --==========================================
