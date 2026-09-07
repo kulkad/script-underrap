@@ -7,7 +7,7 @@
 --// 5. Setelah webhook selesai, scanner baru server hop
 --// 6. Server hop memakai Roblox Public Server API
 --// 7. Menangani TeleportInitFailed
---// + AUTO-BUY (by request)
+
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -35,27 +35,25 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 35
-local SAFE_HOP_COOLDOWN_SECONDS = 40
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 15
-local SAFE_SERVER_HOP_RETRY_LIMIT = 4
+local SAFE_SCAN_COOLDOWN_SECONDS = 20
+local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
+local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 2
-local BOOTH_LOAD_DELAY_SECONDS = 10
+local WEBHOOK_DELAY_SECONDS = 1
+local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
-local SALES_HISTORY_DAYS = 6
-local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 7
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 5
+local SERVER_HOP_DELAY_SECONDS = 0
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
 local MAX_PREFERRED_PLAYERS = 25
 local MIN_FALLBACK_PLAYERS = 5
-local SERVER_API_MAX_PAGES = 5
-local SERVER_HOP_CYCLE = 10
-local PREFERRED_HOP_COUNT = 8
+local SERVER_API_MAX_PAGES = 3
+local SERVER_HOP_CYCLE = 15
+local PREFERRED_HOP_COUNT = 14
 local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
 
 local lastServerHopAt = 0
@@ -66,136 +64,6 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
-
---==================================================
--- AUTO-BUY CONFIG
---==================================================
-
-local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
-
-local AUTO_BUY_LIST = {
-    ["Pulseheart Set"] = 4000,
-    ["Cosmic Wrath"] = 34000,
-    ["Lily Katana"] = 4200,
-    ["Diamond Starblade"] = 4000,
-    ["Snowball Launcher"] = 3400,
-    ["Floppy Chicken"] = 3400,
-    ["Moonflower Greatsword"] = 3300,
-    ["Starwand"] = 3200,
-    ["Hellfire King"] = 3200,
-    ["Hollow Oath Katana"] = 3200,
-    ["Black Oni katana"] = 3200,
-    ["Eternal Scythe"] = 2000,
-    ["Enchanted Bluerose"] = 2100,
-    ["Sunset Pastelblade"] = 2100,
-    ["Glacialis Requiem"] = 1400,
-    ["Crystal Blade"] = 1400,
-    ["Black Ninja Star"] = 1700,
-    ["Riftspike Reaper"] = 1300,
-    ["Oceanic Reaper"] = 1500,
-    ["All-Star Striker"] = 1000,
-    ["Coffin"] = 9000,
-    ["Y2K Blade"] = 600,
-    ["Ban Hammer"] = 9400,
-    ["Wolf Greatsword"] = 15000,
-    ["Sea Turtle"] = 12500,
-    ["North Blade"] = 1400,
-    ["Dual Chroma set"] = 11500,
-    ["Spinalis"] = 10000,
-    ["Viral Piercer"] = 7000,
-    ["Chroma Scythe"] = 7500,
-    ["The Curse"] = 4400,
-    ["Dual Yinyang Greatsword"] = 4500,
-    ["Prismatic Odachi"] = 3000,
-    ["Shark"] = 3000,
-    ["Aetherion"] = 1800,
-    ["Crimson Backblade"] = 1800,
-    ["Thorned Sovereign"] = 2100,
-    ["Water Slasher"] = 2100,
-    ["Calamity Guardian"] = 2100,
-    ["Amethyst Backblade"] = 2000,
-    ["Etheral Bombardment"] = 2000,
-    ["Nebula Sniper"] = 2000,
-    ["Blackhole Sword"] = 1900,
-    ["Candycane Sniper"] = 1800,
-    ["Draconic Greatsword"] = 1700,
-    ["Venomlight Scythe"] = 1600,
-    ["Santa Greatsword"] = 1600,
-    ["Dual Black Cat Scythe"] = 1500,
-    ["Red Ninja Star"] = 1500,
-    ["Pink Ninja Star"] = 1400,
-    ["Starshooter Rapier"] = 1400,
-    ["Blue Oni Katana"] = 2800,
-    ["Pink Oni Katana"] = 2900,
-    ["Purple Oni Katana"] = 2900,
-    ["Dual Wonderwisp Greatsword"] = 3000,
-    ["Pearl Angel Katana"] = 3400,
-    ["Dual Eternal Greatsword"] = 3200,
-    ["Chroma Ninja Star"] = 3200,
-    ["Astral Seraph Blade"] = 3200,
-    ["Proyection Sorcery Katana"] = 3800,
-    ["Blackhole Set"] = 3700,
-    ["Celestial Lance"] = 3500,
-    ["Hellwing Set"] = 4000,
-    ["Halberd"] = 3100,
-    ["Guardian of the underworld"] = 3500,
-    ["Devil Greatsword"] = 3800,
-    ["Frostbound Latern"] = 4000,
-    ["Void Guardian"] = 4300,
-    ["Poisoned Bunny"] = 4700,
-    ["Crystal Fairyblade"] = 4700,
-    ["Green Ninja Katana"] = 4800,
-    ["Red Ninja Katana"] = 5700,
-    ["Blue Ninja katana"] = 5900,
-    ["Void Blade"] = 1700,
-    ["Abyssal Blade"] = 1300,
-    ["Cloud"] = 22000,
-    ["Crystal Greatblade"] = 1700,
-    ["Kitty Katana"] = 12500,
-    ["Neo-Neko Katana"] = 490,
-    ["Witch's Curse"] = 3000,
-    ["Wind Thorn"] = 1000,
-    ["Jackolantern"] = 16000,
-    ["Eternal Piercer"] = 28000,
-    ["Valentine Hearts"] = 8700,
-    ["Rose Gift"] = 9500,
-    ["Love For You"] = 12500,
-    ["Chroma Blade"] = 13900,
-    ["King Blade"] = 12000,
-    ["Puppy"] = 16000,
-    ["Flaming Sword"] = 3100,
-    ["Pillow"] = 2400,
-    ["Royal Duality"] = 45000,
-    ["Holy Blade"] = 2000,
-    ["Higanbana Katana"] = 3900,
-    ["Moonflower Katana"] = 18000,
-    ["Evil Deal"] = 3000,
-    ["Kitty Rocket"] = 9000,
-    ["Cat Paw"] = 11000,
-    ["Brutality Affection Bat"] = 7200,
-    ["Borealis"] = 27000,
-    ["Celestial Whisper"] = 22000,
-    ["Reindeer"] = 32000,
-    ["Siam Ember Axe"] = 98000,
-    ["Zombie Slide"] = 100000,
-    ["Prince Blade"] = 2550,
-    ["Slime"] = 7500,
-    ["Aligned Constellation"] = 4100,
-    ["Dancinha"] = 3000,
-    ["Riftflare Katana"] = 3000,
-    ["Fox Katana"] = 5500,
-    ["Milk & Cookies"] = 3000,
-    ["Kraken"] = 6900,
-    ["Sakura's Requiem"] = 3900,
-    ["Hitman"] = 5300,
-    ["Angel Greatsword"] = 3000,
-    ["Bunny"] = 120000,
-    ["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 28000,
-    ["Regret Blades"] = 19000,
-    ["Eternum Galepiercer"] = 8000,
-    ["Phantom Chase"] = 62,
-}
 
 --==================================================
 -- WEBHOOKS
@@ -740,12 +608,6 @@ local Controllers =
 local Trading =
     Controllers:WaitForChild("Trading")
 
-local Net =
-    require(ReplicatedStorage.Packages.Net)
-
-local RAPHistoryRequest =
-    Net:RemoteFunction("RequestRAPHistory")
-
 local BoothController =
     require(Controllers.Booth.BoothController)
 
@@ -916,184 +778,6 @@ local function getRAP(itemType, itemKey)
         return nil
     end
 
-    return result
-end
-
-local SalesHistoryCache = {}
-
-local function getSalesHistory(itemType, itemKey)
-    if not itemType or not itemKey then
-        return nil
-    end
-
-    local cacheKey =
-        tostring(itemType)
-        .. ":"
-        .. tostring(itemKey)
-
-    if SalesHistoryCache[cacheKey] ~= nil then
-        return SalesHistoryCache[cacheKey] or nil
-    end
-
-    local endDate = DateTime.now()
-    local startDate = DateTime.fromUnixTimestamp(
-        endDate.UnixTimestamp - SALES_HISTORY_DAYS * 86400
-    )
-
-    local success, requestSuccess, points = pcall(function()
-        local invokeSuccess, history = RAPHistoryRequest:InvokeServer(
-            itemType,
-            itemKey,
-            startDate,
-            endDate
-        )
-
-        return invokeSuccess, history
-    end)
-
-    if not success or not requestSuccess or typeof(points) ~= "table" then
-        SalesHistoryCache[cacheKey] = false
-
-        if DEBUG then
-            warn("[SALES HISTORY] Request failed:", itemType, itemKey)
-        end
-
-        return nil
-    end
-
-    local totalSales = 0
-    local rapTotal = 0
-    local rapPointCount = 0
-    local daily = {}
-
-    for _, point in ipairs(points) do
-        if typeof(point) == "table"
-            and typeof(point.Date) == "DateTime"
-            and tonumber(point.RAP)
-            and tonumber(point.Count)
-        then
-            local utcDate = point.Date:ToUniversalTime()
-            local day = DateTime.fromUniversalTime(
-                utcDate.Year,
-                utcDate.Month,
-                utcDate.Day
-            )
-            local dayKey = day.UnixTimestamp
-            local dayData = daily[dayKey]
-
-            if not dayData then
-                dayData = {
-                    date = day,
-                    rapTotal = 0,
-                    pointCount = 0,
-                    sales = 0,
-                }
-                daily[dayKey] = dayData
-            end
-
-            local rapValue = tonumber(point.RAP)
-            local sales = tonumber(point.Count)
-
-            dayData.rapTotal += rapValue
-            dayData.pointCount += 1
-            dayData.sales += sales
-            totalSales += sales
-            rapTotal += rapValue
-            rapPointCount += 1
-        end
-    end
-
-    if rapPointCount == 0 then
-        SalesHistoryCache[cacheKey] = false
-        return nil
-    end
-
-    local chartLabels = {}
-    local chartValues = {}
-    local chartSales = {}
-    local dailyRows = {}
-
-    for _, dayData in pairs(daily) do
-        table.insert(dailyRows, dayData)
-    end
-
-    table.sort(dailyRows, function(left, right)
-        return left.date.UnixTimestamp < right.date.UnixTimestamp
-    end)
-
-    local hasSalesDayOverThreshold = false
-
-    for _, dayData in ipairs(dailyRows) do
-        if dayData.sales > MIN_SALES_COUNT then
-            hasSalesDayOverThreshold = true
-        end
-
-        table.insert(
-            chartLabels,
-            dayData.date:FormatUniversalTime("MMM D", "en-us")
-        )
-        table.insert(
-            chartValues,
-            math.round(dayData.rapTotal / dayData.pointCount)
-        )
-        table.insert(chartSales, dayData.sales)
-    end
-
-    local chartConfig = {
-        type = "line",
-        data = {
-            labels = chartLabels,
-            datasets = {
-                {
-                    label = "Rata-rata RAP",
-                    data = chartValues,
-                    borderColor = "#2dd4a3",
-                    backgroundColor = "rgba(45,212,163,0.12)",
-                    fill = true,
-                    tension = 0.25,
-                    pointRadius = 3,
-                    pointHoverRadius = 6,
-                },
-            },
-        },
-        options = {
-            responsive = true,
-            maintainAspectRatio = false,
-            plugins = {
-                title = {
-                    display = true,
-                    text = "Rata-rata RAP per Hari",
-                },
-                tooltip = {
-                    callbacks = {
-                        label = "function(context) { return 'RAP: ' + context.parsed.y + ' | Sales: ' + "
-                            .. HttpService:JSONEncode(chartSales)
-                            .. "[context.dataIndex]; }",
-                    },
-                },
-            },
-            scales = {
-                y = {
-                    beginAtZero = false,
-                },
-            },
-        },
-    }
-
-    local chartUrl =
-        "https://quickchart.io/chart?width=900&height=460&format=png&c="
-        .. HttpService:UrlEncode(
-            HttpService:JSONEncode(chartConfig)
-        )
-
-    local result = {
-        totalSales = totalSales,
-        averageRap = math.round(rapTotal / rapPointCount),
-        hasSalesDayOverThreshold = hasSalesDayOverThreshold,
-        chartUrl = chartUrl,
-    }
-
-    SalesHistoryCache[cacheKey] = result
     return result
 end
 
@@ -2086,35 +1770,6 @@ local function getTierColor(tierName)
 end
 
 --==================================================
--- AUTO-BUY
---==================================================
-
-local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
-    if not AUTO_BUY_ENABLED then return false end
-    if price > maxPrice then
-        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
-        return false
-    end
-
-    -- Konversi ownerId ke Player object kalau online
-    local numericOwnerId = tonumber(ownerId)
-    local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
-
-    local success, result = pcall(function()
-        return BoothController:PurchaseListing(ownerArg, listingId)
-    end)
-
-    if success then
-        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-        return true
-    else
-        warn("[AUTO-BUY] ❌ Gagal beli", itemName, ":", tostring(result))
-        return false
-    end
-end
-
---==================================================
 -- WEBHOOK
 --==================================================
 
@@ -2378,14 +2033,6 @@ local function sendWebhook(
                 itemImageUrl
             )
         end
-    end
-
-    if listing.salesHistory
-        and listing.salesHistory.chartUrl then
-
-        embed.image = {
-            url = listing.salesHistory.chartUrl,
-        }
     end
 
     local payload = {
@@ -2718,30 +2365,6 @@ local function inspectListing(
         DEEP_UNDERRAP_PERCENT
     and not boosted
 
-    local salesHistory
-
-    if (isUnderrap or isNuke) and not boosted then
-        salesHistory = getSalesHistory(
-            itemType,
-            rapKey
-        )
-
-        if tierName == "LOW"
-            and (not salesHistory
-                or not salesHistory.hasSalesDayOverThreshold) then
-            if DEBUG then
-                warn(
-                    "[LOW SALES FILTER] Skipped:",
-                    itemName,
-                    "no day with sales >",
-                    MIN_SALES_COUNT
-                )
-            end
-
-            return
-        end
-    end
-
     --==================================================
     -- DEBUG
     --==================================================
@@ -2839,7 +2462,6 @@ local function inspectListing(
 
             boothClaimed = boothMetadata.claimed,
             boothLocation = boothMetadata.location,
-            salesHistory = salesHistory,
         }
     end
 end
@@ -3066,9 +2688,14 @@ TeleportService.TeleportInitFailed:Connect(
 -- SERVER HOP
 --==================================================
 
-serverHop = function()
+serverHop = function(serverId)
+
     if not ENABLE_SERVER_HOP then
-        print("[Server Hop] Disabled.")
+
+        print(
+            "[Server Hop] Disabled."
+        )
+
         return
     end
 
@@ -3077,23 +2704,95 @@ serverHop = function()
         return
     end
 
-    if lastServerHopAt > 0 and not canDoServerHop() then
-        print("[Server Hop] Cooldown aktif; menunggu server hop berikutnya.")
+    if not serverId and not canDoServerHop() then
+        print(
+            "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
+        )
         return
     end
 
     hopInProgress = true
+
+    print(
+        "======================================"
+    )
+
+    print(
+        "[Server Hop] Semua webhook sudah dikirim."
+    )
+
+    if not serverId then
+        print(
+            "[Server Hop] Menunggu "
+            .. tostring(
+                SERVER_HOP_DELAY_SECONDS
+            )
+            .. " detik..."
+        )
+    end
+
+    print(
+        "======================================"
+    )
+
+    if not serverId then
+        task.wait(
+            SERVER_HOP_DELAY_SECONDS
+        )
+
+        serverId = getNewServer()
+    else
+        print(
+            "[Server Hop] Target sudah disiapkan saat webhook phase."
+        )
+    end
+
+    if not serverId then
+        hopInProgress = false
+        warn(
+            "[Server Hop] Tidak menemukan server baru."
+        )
+
+        task.delay(
+            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            function()
+                if not hopInProgress then
+                    serverHop()
+                end
+            end
+        )
+
+        return
+    end
+
     lastServerHopAt = os.clock()
 
-    print("[Server Hop] Webhook selesai; teleport ke server berikutnya.")
+    print(
+        "[Server Hop] Teleport ke:",
+        tostring(serverId)
+    )
 
-    local success, result = pcall(function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-    end)
+    local success, result =
+        pcall(function()
+
+            TeleportService:
+                TeleportToPlaceInstance(
+                    game.PlaceId,
+                    serverId,
+                    LocalPlayer
+                )
+
+        end)
 
     if not success then
         hopInProgress = false
         lastServerHopAt = 0
+        preparedServerId = nil
+        if lastTeleportTargetId then
+            blockedServerIds[lastTeleportTargetId] = true
+            lastTeleportTargetId = nil
+        end
+
         hopAttemptCount += 1
         if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
             hopAttemptCount = 0
@@ -3108,7 +2807,14 @@ serverHop = function()
             tostring(result)
         )
 
-        task.delay(SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS, serverHop)
+        task.delay(
+            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            function()
+                if not hopInProgress then
+                    serverHop()
+                end
+            end
+        )
 
     else
 
@@ -3284,17 +2990,6 @@ print("======================================")
 
                     detectedCount += 1
 
-                    --==================================================
-                    -- AUTO-BUY CHECK
-                    --==================================================
-
-                    if AUTO_BUY_ENABLED then
-                        local maxPrice = AUTO_BUY_LIST[result.itemName]
-                        if maxPrice then
-                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
-                        end
-                    end
-
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
                         or {}
@@ -3328,6 +3023,12 @@ print("======================================")
     print(
         "======================================"
     )
+
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
 
     local webhookCount = 0
 
@@ -3504,5 +3205,6 @@ end
 --==================================================
 -- RUN
 --==================================================
+
 
 scan()
