@@ -3407,12 +3407,6 @@ print("======================================")
         "======================================"
     )
 
-    if ENABLE_SERVER_HOP then
-        task.spawn(function()
-            serverHop()
-        end)
-    end
-
     local webhookCount = 0
 
     for ownerId, listings
