@@ -209,13 +209,13 @@ local AUTO_BUY_LIST = {
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
 local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
-    MID = "https://discord.com/api/webhooks/1543706710244589698/_THA47t4vJdnPYY23W5yFto012XfGIi7ULE23UAvr64ZIs7r6AG2cqu-FRLw3u36oo8x",
-    HIGH = "https://discord.com/api/webhooks/1543707373900660756/rNWk0OGFmxHNUStM4RN43nSMegf5xeNNFvFkGMwrub2SP7C05WzzcmwiVL_TkDQ0AGo2",
-    ["100K+"] = "https://discord.com/api/webhooks/1543707100637564999/3yeKaYamEkuKSrdSjTRVhOf_SSRZ_Dag3rCQBgjJLYzwILCnLZLo8_RiOqxNoBo9z8bA",
-    BOOSTED = "https://discord.com/api/webhooks/1543707587617226782/86m7vT9fktckDHFumeoxRmIkLLdAG3cUmmzZ4Gtp4dvR55zJKD9HXX6kq91lIgSElYgZ",
-    NUKE = "https://discord.com/api/webhooks/1543707672304554055/hSQK_b2OS0z9sXeX0gsVnewkcHrXgrr7zZ51oPlomgGsUOnAJQC_iQVvzMN1_uSdUfjS",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1543707474568413264/EE7BJOIOYdu09gXyfJie6VVvQdSGM6XkqPLO-YnBSHkRF9or4bV8P9ErZK3Jjvx_3ij1",
+    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
+    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
+    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
+    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
+    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
+    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
+    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
 }
 
 --==================================================
