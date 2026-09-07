@@ -3066,14 +3066,9 @@ TeleportService.TeleportInitFailed:Connect(
 -- SERVER HOP
 --==================================================
 
-serverHop = function(serverId)
-
+serverHop = function()
     if not ENABLE_SERVER_HOP then
-
-        print(
-            "[Server Hop] Disabled."
-        )
-
+        print("[Server Hop] Disabled.")
         return
     end
 
@@ -3082,95 +3077,23 @@ serverHop = function(serverId)
         return
     end
 
-    if not serverId and not canDoServerHop() then
-        print(
-            "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
-        )
+    if lastServerHopAt > 0 and not canDoServerHop() then
+        print("[Server Hop] Cooldown aktif; menunggu server hop berikutnya.")
         return
     end
 
     hopInProgress = true
-
-    print(
-        "======================================"
-    )
-
-    print(
-        "[Server Hop] Semua webhook sudah dikirim."
-    )
-
-    if not serverId then
-        print(
-            "[Server Hop] Menunggu "
-            .. tostring(
-                SERVER_HOP_DELAY_SECONDS
-            )
-            .. " detik..."
-        )
-    end
-
-    print(
-        "======================================"
-    )
-
-    if not serverId then
-        task.wait(
-            SERVER_HOP_DELAY_SECONDS
-        )
-
-        serverId = getNewServer()
-    else
-        print(
-            "[Server Hop] Target sudah disiapkan saat webhook phase."
-        )
-    end
-
-    if not serverId then
-        hopInProgress = false
-        warn(
-            "[Server Hop] Tidak menemukan server baru."
-        )
-
-        task.delay(
-            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
-            function()
-                if not hopInProgress then
-                    serverHop()
-                end
-            end
-        )
-
-        return
-    end
-
     lastServerHopAt = os.clock()
 
-    print(
-        "[Server Hop] Teleport ke:",
-        tostring(serverId)
-    )
+    print("[Server Hop] Webhook selesai; teleport ke server berikutnya.")
 
-    local success, result =
-        pcall(function()
-
-            TeleportService:
-                TeleportToPlaceInstance(
-                    game.PlaceId,
-                    serverId,
-                    LocalPlayer
-                )
-
-        end)
+    local success, result = pcall(function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end)
 
     if not success then
         hopInProgress = false
         lastServerHopAt = 0
-        preparedServerId = nil
-        if lastTeleportTargetId then
-            blockedServerIds[lastTeleportTargetId] = true
-            lastTeleportTargetId = nil
-        end
-
         hopAttemptCount += 1
         if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
             hopAttemptCount = 0
@@ -3185,14 +3108,7 @@ serverHop = function(serverId)
             tostring(result)
         )
 
-        task.delay(
-            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
-            function()
-                if not hopInProgress then
-                    serverHop()
-                end
-            end
-        )
+        task.delay(SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS, serverHop)
 
     else
 
@@ -3412,12 +3328,6 @@ print("======================================")
     print(
         "======================================"
     )
-
-    if ENABLE_SERVER_HOP then
-        task.spawn(function()
-            serverHop()
-        end)
-    end
 
     local webhookCount = 0
 
