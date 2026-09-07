@@ -73,8 +73,88 @@ local preparedServerId = nil
 
 local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
 
+--==================================================
+-- AUTO-BUY CONFIG
+--==================================================
+
+local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
+
 local AUTO_BUY_LIST = {
-    -- dari daftar baru
+    -- Dari list baru
+    ["Pulseheart Set"] = 4000,
+    ["Cosmic Wrath"] = 34000,
+    ["Lily Katana"] = 4200,
+    ["Diamond Starblade"] = 4000,
+    ["Snowball Launcher"] = 3400,
+    ["Floppy Chicken"] = 3400,
+    ["Moonflower Greatsword"] = 3300,
+    ["Starwand"] = 3200,
+    ["Hellfire King"] = 3200,
+    ["Hollow Oath Katana"] = 3200,
+    ["Black Oni katana"] = 3200,
+    ["Eternal Scythe"] = 2000,
+    ["Enchanted Bluerose"] = 2100,
+    ["Sunset Pastelblade"] = 2100,
+    ["Glacialis Requiem"] = 1400,
+    ["Crystal Blade"] = 1400,
+    ["Black Ninja Star"] = 1700,
+    ["Riftspike Reaper"] = 1300,
+    ["Oceanic Reaper"] = 1500,
+    ["All-Star Striker"] = 1000,
+    ["Coffin"] = 9000,
+    ["Ban Hammer"] = 9400,
+    ["Wolf Greatsword"] = 15000,
+    ["Sea Turtle"] = 12500,
+    ["North Blade"] = 1400,
+    ["Dual Chroma set"] = 11500,
+    ["Spinalis"] = 10000,
+    ["Viral Piercer"] = 7000,
+    ["Chroma Scythe"] = 7500,
+    ["The Curse"] = 4400,
+    ["Dual Yinyang Greatsword"] = 4500,
+    ["Prismatic Odachi"] = 3000,
+    ["Shark"] = 3000,
+    ["Aetherion"] = 1800,
+    ["Crimson Backblade"] = 1800,
+    ["Thorned Sovereign"] = 2100,
+    ["Water Slasher"] = 2100,
+    ["Calamity Guardian"] = 2100,
+    ["Amethyst Backblade"] = 2000,
+    ["Etheral Bombardment"] = 2000,
+    ["Nebula Sniper"] = 2000,
+    ["Blackhole Sword"] = 1900,
+    ["Candycane Sniper"] = 1800,
+    ["Draconic Greatsword"] = 1700,
+    ["Venomlight Scythe"] = 1600,
+    ["Santa Greatsword"] = 1600,
+    ["Dual Black Cat Scythe"] = 1500,
+    ["Red Ninja Star"] = 1500,
+    ["Pink Ninja Star"] = 1400,
+    ["Starshooter Rapier"] = 1400,
+    ["Blue Oni Katana"] = 2800,
+    ["Pink Oni Katana"] = 2900,
+    ["Purple Oni Katana"] = 2900,
+    ["Dual Wonderwisp Greatsword"] = 3000,
+    ["Pearl Angel Katana"] = 3400,
+    ["Dual Eternal Greatsword"] = 3200,
+    ["Chroma Ninja Star"] = 3200,
+    ["Astral Seraph Blade"] = 3200,
+    ["Proyection Sorcery Katana"] = 3800,
+    ["Blackhole Set"] = 3700,
+    ["Celestial Lance"] = 3500,
+    ["Hellwing Set"] = 4000,
+    ["Halberd"] = 3100,
+    ["Guardian of the underworld"] = 3500,
+    ["Devil Greatsword"] = 3800,
+    ["Frostbound Latern"] = 4000,
+    ["Void Guardian"] = 4300,
+    ["Poisoned Bunny"] = 4700,
+    ["Crystal Fairyblade"] = 4700,
+    ["Green Ninja Katana"] = 4800,
+    ["Red Ninja Katana"] = 5700,
+    ["Blue Ninja katana"] = 5900,
+
+    -- Dari list sebelumnya (dengan harga termurah untuk duplikat)
     ["Void Blade"] = 1700,
     ["Abyssal Blade"] = 1300,
     ["Cloud"] = 22000,
@@ -88,7 +168,7 @@ local AUTO_BUY_LIST = {
     ["Valentine Hearts"] = 8700,
     ["Rose Gift"] = 9500,
     ["Love For You"] = 12500,
-    ["Chroma Blade"] = 13900,
+    ["Chroma Blade"] = 13900,   -- lebih murah dari 14000
     ["King Blade"] = 12000,
     ["Puppy"] = 16000,
     ["Flaming Sword"] = 3100,
@@ -108,22 +188,20 @@ local AUTO_BUY_LIST = {
     ["Zombie Slide"] = 100000,
     ["Prince Blade"] = 2550,
     ["Slime"] = 7500,
-    ["Aligned Constellation"] = 4100,
+    ["Aligned Constellation"] = 4100,   -- lebih murah dari 4200
     ["Dancinha"] = 3000,
     ["Riftflare Katana"] = 3000,
-    ["Fox Katana"] = 5700,
+    ["Fox Katana"] = 5500,   -- lebih murah dari 5700
     ["Milk & Cookies"] = 3000,
-    ["Kraken"] = 6900,
-    ["Sakura's Requiem"] = 3850,
+    ["Kraken"] = 6900,       -- lebih murah dari 7000
+    ["Sakura's Requiem"] = 3850,  -- lebih murah dari 3900
     ["Hitman"] = 5300,
     ["Angel Greatsword"] = 3000,
-
-    -- dari daftar sebelumnya yang gak ada di atas
     ["Bunny"] = 120000,
     ["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 28000,
+    ["Icebound Dominus"] = 28000,   -- lebih murah dari 32000
     ["Regret Blades"] = 19000,
-    ["Eternum Galepiercer"] = 8000,
+    ["Eternum Galepiercer"] = 8000, -- lebih murah dari 8500
     ["Phantom Chase"] = 62,
 }
 
