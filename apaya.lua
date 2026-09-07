@@ -35,8 +35,10 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 20
-local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_SCAN_COOLDOWN_MIN = 20
+local SAFE_SCAN_COOLDOWN_MAX = 35
+local SAFE_HOP_COOLDOWN_MIN = 30
+local SAFE_HOP_COOLDOWN_MAX = 50
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
@@ -188,7 +190,7 @@ local AUTO_BUY_LIST = {
     ["Fox Katana"] = 5500,   -- lebih murah dari 5700
     ["Milk & Cookies"] = 3000,
     ["Kraken"] = 6900,       -- lebih murah dari 7000
-    ["Sakura's Requiem"] = 3850,  -- lebih murah dari 3900
+    ["Sakura's Requiem"] = 3900,  -- lebih murah dari 3900
     ["Hitman"] = 5300,
     ["Angel Greatsword"] = 3000,
     ["Bunny"] = 120000,
@@ -205,13 +207,13 @@ local AUTO_BUY_LIST = {
 -- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
 local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
-    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
-    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
-    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
-    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
-    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
+    LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
+    MID = "https://discord.com/api/webhooks/1543706710244589698/_THA47t4vJdnPYY23W5yFto012XfGIi7ULE23UAvr64ZIs7r6AG2cqu-FRLw3u36oo8x",
+    HIGH = "https://discord.com/api/webhooks/1543707373900660756/rNWk0OGFmxHNUStM4RN43nSMegf5xeNNFvFkGMwrub2SP7C05WzzcmwiVL_TkDQ0AGo2",
+    ["100K+"] = "https://discord.com/api/webhooks/1543707100637564999/3yeKaYamEkuKSrdSjTRVhOf_SSRZ_Dag3rCQBgjJLYzwILCnLZLo8_RiOqxNoBo9z8bA",
+    BOOSTED = "https://discord.com/api/webhooks/1543707587617226782/86m7vT9fktckDHFumeoxRmIkLLdAG3cUmmzZ4Gtp4dvR55zJKD9HXX6kq91lIgSElYgZ",
+    NUKE = "https://discord.com/api/webhooks/1543707672304554055/hSQK_b2OS0z9sXeX0gsVnewkcHrXgrr7zZ51oPlomgGsUOnAJQC_iQVvzMN1_uSdUfjS",
+    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1543707474568413264/EE7BJOIOYdu09gXyfJie6VVvQdSGM6XkqPLO-YnBSHkRF9or4bV8P9ErZK3Jjvx_3ij1",
 }
 
 --==================================================
@@ -724,12 +726,18 @@ local function getResponseBody(response)
     return response.Body or response.body
 end
 
+local function randomDelay(minimum, maximum)
+    return minimum + math.random() * (maximum - minimum)
+end
+
 local function canDoServerHop()
-    return os.clock() - lastServerHopAt >= SERVER_HOP_COOLDOWN_SECONDS
+    local cooldown = randomDelay(SAFE_HOP_COOLDOWN_MIN, SAFE_HOP_COOLDOWN_MAX)
+    return os.clock() - lastServerHopAt >= cooldown
 end
 
 local function canDoScan()
-    return os.clock() - lastScanAt >= SAFE_SCAN_COOLDOWN_SECONDS
+    local cooldown = randomDelay(SAFE_SCAN_COOLDOWN_MIN, SAFE_SCAN_COOLDOWN_MAX)
+    return os.clock() - lastScanAt >= cooldown
 end
 
 --==================================================
@@ -2092,6 +2100,7 @@ end
 --==================================================
 
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
+    task.wait(randomDelay(0.5, 1.5))
     if not AUTO_BUY_ENABLED then return false end
     if price > maxPrice then
         print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
@@ -2120,41 +2129,21 @@ end
 -- WEBHOOK
 --==================================================
 
-local function sendWebhook(
-    webhookType,
-    ownerId,
-    listing
-)
-
-    local webhookUrl
-
-    if type(WEBHOOKS) == "table" then
-        webhookUrl = WEBHOOKS[webhookType]
-    end
-
-    if not webhookUrl
-        or webhookUrl == ""
-        or string.find(
-            webhookUrl,
-            "PASTE_"
-        ) then
-
-        warn(
-            "[WEBHOOK] URL belum diisi:",
-            webhookType
-        )
-
+local function sendWebhook(webhookType, ownerId, listing)
+    local webhookUrl = WEBHOOKS[webhookType]
+    if not webhookUrl or webhookUrl == "" or string.find(webhookUrl, "PASTE_") then
+        warn("[WEBHOOK] URL belum diisi:", webhookType)
         return false
     end
-
     if not REQUEST then
-
-        warn(
-            "[WEBHOOK] Request function tidak tersedia."
-        )
-
+        warn("[WEBHOOK] Request function tidak tersedia.")
         return false
     end
+
+    -- ✅ Tambahkan delay acak di sini
+    task.wait(randomDelay(1.5, 3.5))
+
+    -- ... sisanya tetap sama
 
     local ownerInfo =
         getOwnerInfo(ownerId)
@@ -3152,6 +3141,9 @@ serverHop = function(serverId)
         tostring(serverId)
     )
 
+    -- Delay acak sebelum teleport (2 - 5 detik)
+task.wait(randomDelay(2, 5))
+
     local success, result =
         pcall(function()
 
@@ -3454,9 +3446,7 @@ print("======================================")
                     webhookCount += 1
                 end
 
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
+                task.wait(randomDelay(1.5, 3.5))
             end
 
             --==========================================
