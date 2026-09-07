@@ -2101,7 +2101,6 @@ end
 --==================================================
 
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
-    task.wait(randomDelay(0.5, 1.5))
     if not AUTO_BUY_ENABLED then return false end
     if price > maxPrice then
         print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
