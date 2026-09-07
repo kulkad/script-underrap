@@ -881,7 +881,6 @@ local function getSalesHistory(itemType, itemKey)
     local chartLabels = {}
     local chartValues = {}
     local chartSales = {}
-    local dailySummary = {}
     local dailyRows = {}
 
     for _, dayData in pairs(daily) do
@@ -892,7 +891,13 @@ local function getSalesHistory(itemType, itemKey)
         return left.date.UnixTimestamp < right.date.UnixTimestamp
     end)
 
+    local hasSalesDayOverThreshold = false
+
     for _, dayData in ipairs(dailyRows) do
+        if dayData.sales > MIN_SALES_COUNT then
+            hasSalesDayOverThreshold = true
+        end
+
         table.insert(
             chartLabels,
             dayData.date:FormatUniversalTime("MMM D", "en-us")
@@ -902,15 +907,6 @@ local function getSalesHistory(itemType, itemKey)
             math.round(dayData.rapTotal / dayData.pointCount)
         )
         table.insert(chartSales, dayData.sales)
-        table.insert(
-            dailySummary,
-            string.format(
-                "%s: `%d sales` | Avg RAP: `%d`",
-                dayData.date:FormatUniversalTime("MMM D", "en-us"),
-                dayData.sales,
-                math.round(dayData.rapTotal / dayData.pointCount)
-            )
-        )
     end
 
     local chartConfig = {
@@ -963,8 +959,8 @@ local function getSalesHistory(itemType, itemKey)
     local result = {
         totalSales = totalSales,
         averageRap = math.round(rapTotal / rapPointCount),
+        hasSalesDayOverThreshold = hasSalesDayOverThreshold,
         chartUrl = chartUrl,
-        dailySummary = dailySummary,
     }
 
     SalesHistoryCache[cacheKey] = result
@@ -2148,17 +2144,6 @@ local function sendWebhook(
         inline = false,
     })
 
-    if listing.salesHistory then
-        table.insert(fields, {
-            name = "Data per Hari (grafik di bawah)",
-            value = table.concat(
-                listing.salesHistory.dailySummary,
-                "\n"
-            ),
-            inline = false,
-        })
-    end
-
     --==================================================
     -- SERVER
     --==================================================
@@ -2584,12 +2569,12 @@ local function inspectListing(
 
         if tierName == "LOW"
             and (not salesHistory
-                or salesHistory.totalSales <= MIN_SALES_COUNT) then
+                or not salesHistory.hasSalesDayOverThreshold) then
             if DEBUG then
                 warn(
                     "[LOW SALES FILTER] Skipped:",
                     itemName,
-                    "total sales <=",
+                    "no day with sales >",
                     MIN_SALES_COUNT
                 )
             end
