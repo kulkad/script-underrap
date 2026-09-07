@@ -2791,14 +2791,12 @@ TeleportService.TeleportInitFailed:Connect(
 )
 
 --==================================================
--- SERVER HOP
+-- SERVER HOP (dimodifikasi)
 --==================================================
 
 serverHop = function(serverId)
     if not ENABLE_SERVER_HOP then
-        print(
-            "[Server Hop] Disabled."
-        )
+        print("[Server Hop] Disabled.")
         return
     end
 
@@ -2808,84 +2806,43 @@ serverHop = function(serverId)
     end
 
     if not serverId and not canDoServerHop() then
-        print(
-            "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
-        )
+        print("[Server Hop] Cooldown aktif; menunggu server hop berikutnya.")
         return
     end
 
     hopInProgress = true
 
-    print(
-        "======================================"
-    )
-    print(
-        "[Server Hop] Semua webhook sudah dikirim."
-    )
+    print("======================================")
+    print("[Server Hop] Memulai proses hop...")
 
     if not serverId then
-        print(
-            "[Server Hop] Menunggu "
-            .. tostring(
-                SERVER_HOP_DELAY_SECONDS
-            )
-            .. " detik..."
-        )
-    end
-
-    print(
-        "======================================"
-    )
-
-    if not serverId then
-        task.wait(
-            SERVER_HOP_DELAY_SECONDS
-        )
-
+        print("[Server Hop] Mencari server baru...")
         serverId = getNewServer()
     else
-        print(
-            "[Server Hop] Target sudah disiapkan saat webhook phase."
-        )
+        print("[Server Hop] Menggunakan server yang sudah disiapkan:", serverId)
     end
 
     if not serverId then
         hopInProgress = false
-        warn(
-            "[Server Hop] Tidak menemukan server baru."
-        )
-
-        task.delay(
-            randomDelay(5, 10),
-            function()
-                if not hopInProgress then
-                    serverHop()
-                end
-            end
-        )
-
+        warn("[Server Hop] Tidak menemukan server baru.")
         return
     end
 
+    -- ===== TAMBAHAN: DELAY PANJANG SEBELUM TELEPORT =====
+    local hopDelay = randomDelay(15, 25)
+    print("[Server Hop] Menunggu " .. tostring(hopDelay) .. " detik sebelum teleport...")
+    task.wait(hopDelay)
+
     lastServerHopAt = os.clock()
+    print("[Server Hop] Teleport ke:", tostring(serverId))
 
-    print(
-        "[Server Hop] Teleport ke:",
-        tostring(serverId)
-    )
-
-    -- ===== DELAY ACAK SEBELUM TELEPORT (3-6 detik) =====
-    task.wait(randomDelay(3, 6))
-
-    local success, result =
-        pcall(function()
-            TeleportService:
-                TeleportToPlaceInstance(
-                    game.PlaceId,
-                    serverId,
-                    LocalPlayer
-                )
-        end)
+    local success, result = pcall(function()
+        TeleportService:TeleportToPlaceInstance(
+            game.PlaceId,
+            serverId,
+            LocalPlayer
+        )
+    end)
 
     if not success then
         hopInProgress = false
@@ -2896,37 +2853,26 @@ serverHop = function(serverId)
             lastTeleportTargetId = nil
         end
 
-        hopAttemptCount += 1
+        hopAttemptCount = hopAttemptCount + 1
         if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
             hopAttemptCount = 0
-            warn(
-                "[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya."
-            )
+            warn("[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya.")
             return
         end
 
-        warn(
-            "[Server Hop] Teleport gagal:",
-            tostring(result)
-        )
-
-        task.delay(
-            randomDelay(5, 10),
-            function()
-                if not hopInProgress then
-                    serverHop()
-                end
+        warn("[Server Hop] Teleport gagal:", tostring(result))
+        task.delay(randomDelay(5, 10), function()
+            if not hopInProgress then
+                serverHop()
             end
-        )
+        end)
     else
-        print(
-            "[Server Hop] Teleport request berhasil."
-        )
+        print("[Server Hop] Teleport request berhasil.")
     end
 end
 
 --==================================================
--- SCAN BOOTH LISTINGS
+-- SCAN (dimodifikasi)
 --==================================================
 
 local function scan()
@@ -2943,98 +2889,53 @@ local function scan()
     scanInProgress = true
     lastScanAt = os.clock()
 
-    print(
-        "======================================"
-    )
-    print(
-        "[Scanner] Starting booth scan..."
-    )
-    print(
-        "======================================"
-    )
+    print("======================================")
+    print("[Scanner] Starting booth scan...")
+    print("======================================")
 
-    -- ===== DELAY ACAK SEBELUM SCAN (2-5 detik) =====
     task.wait(randomDelay(2, 5))
 
-    local data =
-        getLoadedBoothData()
-
+    local data = getLoadedBoothData()
     if not data then
-        warn(
-            "[Scanner] BoothListings returned nil."
-        )
-
+        warn("[Scanner] BoothListings returned nil.")
         serverHop()
         scanInProgress = false
         return
     end
 
-    local loadedListingCount =
-        countListings(data)
-
+    local loadedListingCount = countListings(data)
     local boothsByOwnerId = buildBoothIndex()
     print("======================================")
     print("[BOOTH INDEX] Claimed booths:")
     print("======================================")
 
     for ownerId, boothData in pairs(boothsByOwnerId) do
-        print(
-            "[CLAIMED]",
-            "Owner:",
-            tostring(ownerId),
-            "| Booth:",
-            boothData.booth
-                and boothData.booth:GetFullName()
-                or "nil"
-        )
+        print("[CLAIMED]", "Owner:", tostring(ownerId), "| Booth:", boothData.booth and boothData.booth:GetFullName() or "nil")
     end
 
     print("======================================")
-
-    print(
-        "[Scanner] Booth listings loaded:",
-        loadedListingCount
-    )
+    print("[Scanner] Booth listings loaded:", loadedListingCount)
     print("======================================")
     print("[LISTING -> BOOTH MATCH TEST]")
     print("======================================")
 
     for ownerId, listings in pairs(data) do
-        local boothData =
-            boothsByOwnerId[
-                normalizeId(ownerId)
-            ]
-
-        print(
-            "[OWNER]",
-            tostring(ownerId),
-            "| Booth:",
-            boothData
-                and boothData.booth
-                and boothData.booth:GetFullName()
-                or "NOT FOUND"
-        )
+        local boothData = boothsByOwnerId[normalizeId(ownerId)]
+        print("[OWNER]", tostring(ownerId), "| Booth:", boothData and boothData.booth and boothData.booth:GetFullName() or "NOT FOUND")
     end
 
     print("======================================")
 
     if loadedListingCount == 0 then
         warn("[Scanner] Tidak ada booth yang termuat; memulai server hop.")
-
         serverHop()
         scanInProgress = false
         return
     end
 
-    if DEBUG
-        and DUMP_RAW_DATA then
-
-        print(
-            "[Scanner] RAW BoothListings:"
-        )
-        print(
-            dump(data)
-        )
+    if DEBUG and DUMP_RAW_DATA then
+        print("[Scanner] RAW BoothListings:")
+        print(dump(data))
     end
 
     local count = 0
@@ -3044,12 +2945,10 @@ local function scan()
 
     for ownerId, listings in pairs(data) do
         if typeof(listings) == "table" then
-            for listingId, listing
-                in pairs(listings) do
+            for listingId, listing in pairs(listings) do
+                count = count + 1
 
-                count += 1
-
-                local itemKey = listing and listing.ItemKey or listing and listing.itemKey or listing and listing.Key or listing and listing.key
+                local itemKey = listing and (listing.ItemKey or listing.itemKey or listing.Key or listing.key)
                 local itemType = listing and (listing.ItemType or listing.itemType or listing.Type or listing.type or listing.Category or listing.category)
                 local price = listing and (listing.Price or listing.price)
                 local listingSignature = tostring(ownerId) .. ":" .. tostring(listingId) .. ":" .. tostring(itemKey) .. ":" .. tostring(itemType) .. ":" .. tostring(price)
@@ -3057,19 +2956,11 @@ local function scan()
                 if seenListings[listingSignature] then
                     continue
                 end
-
                 seenListings[listingSignature] = true
 
-                local result =
-                    inspectListing(
-                        ownerId,
-                        listingId,
-                        listing,
-                        boothsByOwnerId
-                    )
-
+                local result = inspectListing(ownerId, listingId, listing, boothsByOwnerId)
                 if result then
-                    detectedCount += 1
+                    detectedCount = detectedCount + 1
 
                     if AUTO_BUY_ENABLED then
                         local maxPrice = AUTO_BUY_LIST[result.itemName]
@@ -3078,41 +2969,29 @@ local function scan()
                         end
                     end
 
-                    groupedListings[ownerId] =
-                        groupedListings[ownerId]
-                        or {}
-
-                    table.insert(
-                        groupedListings[ownerId],
-                        result
-                    )
+                    groupedListings[ownerId] = groupedListings[ownerId] or {}
+                    table.insert(groupedListings[ownerId], result)
                 end
             end
         end
     end
 
-    print(
-        "======================================"
-    )
-    print(
-        "[Webhook] Starting webhook phase..."
-    )
-    print(
-        "[Webhook] Detected:",
-        detectedCount
-    )
-    print(
-        "======================================"
-    )
+    print("======================================")
+    print("[Webhook] Starting webhook phase...")
+    print("[Webhook] Detected:", detectedCount)
+    print("======================================")
+
+    -- ===== MULAI SERVER HOP SECARA PARALEL SEBELUM WEBHOOK =====
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
 
     local webhookCount = 0
 
-    for ownerId, listings
-        in pairs(groupedListings) do
-
-        for _, listing
-            in ipairs(listings) do
-
+    for ownerId, listings in pairs(groupedListings) do
+        for _, listing in ipairs(listings) do
             if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                 break
             end
@@ -3121,18 +3000,10 @@ local function scan()
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
-
-                local sent =
-                    sendWebhook(
-                        "NUKE",
-                        ownerId,
-                        listing
-                    )
-
+                local sent = sendWebhook("NUKE", ownerId, listing)
                 if sent then
-                    webhookCount += 1
+                    webhookCount = webhookCount + 1
                 end
-
                 task.wait(randomDelay(1.5, 3.5))
             end
 
@@ -3140,102 +3011,40 @@ local function scan()
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
-
-                local sent =
-                    sendWebhook(
-                        "BOOSTED",
-                        ownerId,
-                        listing
-                    )
-
+                local sent = sendWebhook("BOOSTED", ownerId, listing)
                 if sent then
-                    webhookCount += 1
+                    webhookCount = webhookCount + 1
                 end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
+                task.wait(WEBHOOK_DELAY_SECONDS)
             end
 
             if listing.price < listing.rap
-                and listing.discount >=
-                    getUnderrapThreshold(
-                        listing.tierName
-                    )
+                and listing.discount >= getUnderrapThreshold(listing.tierName)
                 and not listing.boosted
-                and not listing.nuke then
-
-                local webhookType
-
-                if listing.deepUnderrap then
-                    webhookType =
-                        "DEEP_UNDERRAP"
-                else
-                    webhookType =
-                        listing.tierName
-                end
-
+                and not listing.nuke
+            then
+                local webhookType = listing.deepUnderrap and "DEEP_UNDERRAP" or listing.tierName
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
-
-                local sent =
-                    sendWebhook(
-                        webhookType,
-                        ownerId,
-                        listing
-                    )
-
+                local sent = sendWebhook(webhookType, ownerId, listing)
                 if sent then
-                    webhookCount += 1
+                    webhookCount = webhookCount + 1
                 end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
+                task.wait(WEBHOOK_DELAY_SECONDS)
             end
         end
     end
 
-    print(
-        "======================================"
-    )
-    print(
-        "[Scanner] Listings scanned:",
-        count
-    )
-    print(
-        "[Scanner] Underrap/special detected:",
-        detectedCount
-    )
-    print(
-        "[Webhook] Webhooks processed:",
-        webhookCount
-    )
-    print(
-        "======================================"
-    )
+    print("======================================")
+    print("[Scanner] Listings scanned:", count)
+    print("[Scanner] Underrap/special detected:", detectedCount)
+    print("[Webhook] Webhooks processed:", webhookCount)
+    print("======================================")
 
-    if ENABLE_SERVER_HOP then
-        print(
-            "[Scanner] Webhook phase selesai."
-        )
-        if SAFE_MODE then
-            print(
-                "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
-            )
-        end
-        print(
-            "[Scanner] Starting server hop..."
-        )
-
-        preparedServerId = nil
-        serverHop()
-    else
-        print(
-            "[Server Hop] Disabled."
-        )
-    end
+    -- Hop sudah dijalankan secara paralel, jadi tidak perlu panggil lagi di sini
+    -- Tapi kita tetap biarkan agar jika ada kegagalan hop, ada cadangan?
+    -- Kita bisa skip karena sudah dipanggil di awal.
 
     hopAttemptCount = 0
     scanInProgress = false
