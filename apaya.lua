@@ -111,6 +111,7 @@ local BOOSTED_ITEMS = {
     ["Crystal Ribbon Blade"] = true,
     ["Dual Stellar Revolver"] = true,
     ["FROSTWALL"] = true,
+    ["Gravebone Scythe"] = true,
     ["Inferno Lance"] = true,
     ["Water Slasher"] = true,
     ["Reborn Wings Blade"] = true,
