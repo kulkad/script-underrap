@@ -73,12 +73,6 @@ local preparedServerId = nil
 
 local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
 
---==================================================
--- AUTO-BUY CONFIG
---==================================================
-
-local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
-
 local AUTO_BUY_LIST = {
     -- Dari list baru
     ["Pulseheart Set"] = 4000,
@@ -2857,116 +2851,357 @@ end
 --==================================================
 
 local function getNewServerOnce()
+
     if not REQUEST then
-        warn("[SERVER HOP] Request function tidak tersedia.")
+        warn(
+            "[SERVER HOP] Request function tidak tersedia."
+        )
         return nil
     end
 
     local preferredServers = {}
     local fallbackServers = {}
-    local url = string.format(
-        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
-        tostring(game.PlaceId)
-    )
+    local cursor = nil
+    local pagesRead = 0
 
-    local response = safeRequest({
-        Url = url,
-        Method = "GET",
-        Headers = {
-            ["Accept"] = "application/json",
-        },
-    }, 1)
+    repeat
+        local url = string.format(
+            "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
+            tostring(game.PlaceId)
+        )
 
-    local responseBody = getResponseBody(response)
-    if not responseBody then
-        warn("[SERVER HOP] Response kosong.")
-        return nil
-    end
+        if cursor then
+            url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
+        end
 
-    local decodeSuccess, data = pcall(function()
-        return HttpService:JSONDecode(responseBody)
-    end)
+        local response = safeRequest({
+            Url = url,
+            Method = "GET",
+            Headers = {
+                ["Accept"] = "application/json",
+            },
+        }, 2)
 
-    if not decodeSuccess or not data or typeof(data.data) ~= "table" then
-        warn("[SERVER HOP] Data server tidak valid.")
-        return nil
-    end
+        local responseBody = getResponseBody(response)
 
-    for _, server in ipairs(data.data) do
-        if typeof(server) == "table"
-            and server.id
-            and server.id ~= game.JobId
-            and tonumber(server.playing) ~= nil
-            and tonumber(server.maxPlayers) ~= nil
-            and tonumber(server.playing) < tonumber(server.maxPlayers) then
-            local playing = tonumber(server.playing)
+        if not responseBody then
+            warn("[SERVER HOP] Response kosong.")
+            return nil
+        end
 
-            table.insert(fallbackServers, server)
+        local statusCode = tonumber(response.StatusCode)
 
-            if playing >= MIN_PREFERRED_PLAYERS then
-                table.insert(preferredServers, server)
+        if statusCode and (statusCode < 200 or statusCode >= 300) then
+            warn(
+                "[SERVER HOP] API HTTP error:",
+                tostring(statusCode),
+                tostring(responseBody):sub(1, 300)
+            )
+            return nil
+        end
+
+        local decodeSuccess, data = pcall(function()
+            return HttpService:JSONDecode(responseBody)
+        end)
+
+        if not decodeSuccess
+            or not data
+            or typeof(data.data) ~= "table"
+        then
+            warn(
+                "[SERVER HOP] Data server tidak valid:",
+                tostring(responseBody):sub(1, 300)
+            )
+            return nil
+        end
+
+        pagesRead += 1
+
+        for _, server in ipairs(data.data) do
+            if typeof(server) == "table"
+                and server.id
+                and server.id ~= game.JobId
+                and not blockedServerIds[tostring(server.id)]
+                and tonumber(server.playing) ~= nil
+                and tonumber(server.maxPlayers) ~= nil
+                and tonumber(server.playing) < tonumber(server.maxPlayers)
+            then
+                local playing = tonumber(server.playing)
+
+                if playing >= MIN_PREFERRED_PLAYERS
+                    and playing <= MAX_PREFERRED_PLAYERS then
+                    table.insert(preferredServers, server)
+                elseif playing >= MIN_FALLBACK_PLAYERS
+                    and playing < MIN_PREFERRED_PLAYERS then
+                    table.insert(fallbackServers, server)
+                end
             end
         end
-    end
 
-    local pool
+        cursor = data.nextPageCursor
+    until not cursor or pagesRead >= SERVER_API_MAX_PAGES
+
+    local pool = nil
+
     if #preferredServers > 0 then
         pool = preferredServers
-        print("[SERVER HOP] Memilih server random dengan 10+ pemain.")
-    else
+        print(
+            "[SERVER HOP] Prioritas: random server 10-25 player"
+        )
+    elseif #fallbackServers > 0 then
         pool = fallbackServers
-        print("[SERVER HOP] Tidak ada server 10+; memilih server random lain.")
+        print(
+            "[SERVER HOP] Pool 10-25 kosong; fallback random server 5-9 player"
+        )
     end
 
     if not pool or #pool == 0 then
-        warn("[SERVER HOP] Tidak ada server yang tersedia.")
+        warn(
+            "[SERVER HOP] Tidak ada server yang tersedia."
+        )
         return nil
     end
 
     local selected = pool[math.random(1, #pool)]
 
+    local currentHopCount = 0
+    pcall(function()
+        currentHopCount = tonumber(
+            TeleportService:GetTeleportSetting(TELEPORT_SETTING_KEY)
+        ) or 0
+    end)
+
+    pcall(function()
+        TeleportService:SetTeleportSetting(
+            TELEPORT_SETTING_KEY,
+            tostring(currentHopCount + 1)
+        )
+    end)
+
     print("======================================")
     print("[SERVER HOP] Target:", tostring(selected.id))
     print("[SERVER HOP] Players:", tostring(selected.playing), "/", tostring(selected.maxPlayers))
     print("[SERVER HOP] Pool size:", tostring(#pool))
+    print("[SERVER HOP] Pool target:", #preferredServers > 0 and "10+ player" or "fallback")
     print("======================================")
 
+    lastTeleportTargetId = tostring(selected.id)
     return selected.id
 end
+
+local function getNewServer()
+    for attempt = 1, SAFE_SERVER_HOP_RETRY_LIMIT + 1 do
+        local serverId = getNewServerOnce()
+
+        if serverId then
+            return serverId
+        end
+
+        if attempt <= SAFE_SERVER_HOP_RETRY_LIMIT then
+            warn(
+                "[SERVER HOP] Mencari server lagi (percobaan "
+                .. tostring(attempt + 1)
+                .. "/"
+                .. tostring(SAFE_SERVER_HOP_RETRY_LIMIT + 1)
+                .. ")."
+            )
+
+            task.wait(
+                SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS
+            )
+        end
+    end
+
+    return nil
+end
+
+
+--==================================================
+-- TELEPORT FAILED HANDLER
+--==================================================
+
+local serverHop
+
+TeleportService.TeleportInitFailed:Connect(
+    function(
+        player,
+        teleportResult,
+        errorMessage
+    )
+
+        if player ~= LocalPlayer then
+            return
+        end
+
+        warn(
+            "[SERVER HOP] TeleportInitFailed:",
+            tostring(teleportResult),
+            tostring(errorMessage)
+        )
+
+        if lastTeleportTargetId then
+            blockedServerIds[lastTeleportTargetId] = true
+            lastTeleportTargetId = nil
+        end
+
+        hopAttemptCount += 1
+        hopInProgress = false
+        lastServerHopAt = 0
+
+        if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopAttemptCount = 0
+            warn(
+                "[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya."
+            )
+            return
+        end
+
+        task.delay(2, function()
+            pcall(function()
+                serverHop()
+            end)
+        end)
+    end
+)
 
 --==================================================
 -- SERVER HOP
 --==================================================
 
-local function serverHop()
+serverHop = function(serverId)
+
     if not ENABLE_SERVER_HOP then
-        print("[Server Hop] Disabled.")
+
+        print(
+            "[Server Hop] Disabled."
+        )
+
         return
     end
 
-    print("[Server Hop] Mencari server random...")
-    local serverId = getNewServerOnce()
+    if hopInProgress then
+        print("[Server Hop] Hop sedang berjalan, skip.")
+        return
+    end
+
+    if not serverId and not canDoServerHop() then
+        print(
+            "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
+        )
+        return
+    end
+
+    hopInProgress = true
+
+    print(
+        "======================================"
+    )
+
+    print(
+        "[Server Hop] Semua webhook sudah dikirim."
+    )
 
     if not serverId then
-        warn("[Server Hop] Tidak menemukan server baru.")
+        print(
+            "[Server Hop] Menunggu "
+            .. tostring(
+                SERVER_HOP_DELAY_SECONDS
+            )
+            .. " detik..."
+        )
+    end
+
+    print(
+        "======================================"
+    )
+
+    if not serverId then
+        task.wait(
+            SERVER_HOP_DELAY_SECONDS
+        )
+
+        serverId = getNewServer()
+    else
+        print(
+            "[Server Hop] Target sudah disiapkan saat webhook phase."
+        )
+    end
+
+    if not serverId then
+        hopInProgress = false
+        warn(
+            "[Server Hop] Tidak menemukan server baru."
+        )
+
+        task.delay(
+            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            function()
+                if not hopInProgress then
+                    serverHop()
+                end
+            end
+        )
+
         return
     end
 
-    print("[Server Hop] Teleport ke:", tostring(serverId))
+    lastServerHopAt = os.clock()
+
+    print(
+        "[Server Hop] Teleport ke:",
+        tostring(serverId)
+    )
 
     local success, result =
         pcall(function()
-            TeleportService:TeleportToPlaceInstance(
-                game.PlaceId,
-                serverId,
-                LocalPlayer
-            )
+
+            TeleportService:
+                TeleportToPlaceInstance(
+                    game.PlaceId,
+                    serverId,
+                    LocalPlayer
+                )
+
         end)
 
     if not success then
-        warn("[Server Hop] Teleport gagal:", tostring(result))
+        hopInProgress = false
+        lastServerHopAt = 0
+        preparedServerId = nil
+        if lastTeleportTargetId then
+            blockedServerIds[lastTeleportTargetId] = true
+            lastTeleportTargetId = nil
+        end
+
+        hopAttemptCount += 1
+        if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
+            hopAttemptCount = 0
+            warn(
+                "[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya."
+            )
+            return
+        end
+
+        warn(
+            "[Server Hop] Teleport gagal:",
+            tostring(result)
+        )
+
+        task.delay(
+            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            function()
+                if not hopInProgress then
+                    serverHop()
+                end
+            end
+        )
+
     else
-        print("[Server Hop] Teleport request dikirim.")
+
+        print(
+            "[Server Hop] Teleport request berhasil."
+        )
+
     end
 end
 
@@ -3179,6 +3414,12 @@ print("======================================")
     print(
         "======================================"
     )
+
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
 
     local webhookCount = 0
 
