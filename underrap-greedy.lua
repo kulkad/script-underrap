@@ -726,6 +726,10 @@ local function getResponseBody(response)
     return response.Body or response.body
 end
 
+local function randomDelay(minimum, maximum)
+    return minimum + math.random() * (maximum - minimum)
+end
+
 local function canDoServerHop()
     local cooldown = randomDelay(SAFE_HOP_COOLDOWN_MIN, SAFE_HOP_COOLDOWN_MAX)
     return os.clock() - lastServerHopAt >= cooldown
