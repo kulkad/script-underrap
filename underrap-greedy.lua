@@ -66,8 +66,6 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
-local teleportStarted = false
-local teleportAttemptId = 0
 
 --==================================================
 -- AUTO-BUY CONFIG
@@ -3022,9 +3020,6 @@ serverHop = function(serverId)
     end
 
     hopInProgress = true
-    teleportStarted = false
-    teleportAttemptId += 1
-    local currentTeleportAttempt = teleportAttemptId
 
     print(
         "======================================"
@@ -3132,29 +3127,8 @@ serverHop = function(serverId)
     else
 
         print(
-            "[Server Hop] Teleport request dikirim; menunggu Roblox memulai teleport..."
+            "[Server Hop] Teleport request berhasil."
         )
-
-        task.delay(15, function()
-            if currentTeleportAttempt ~= teleportAttemptId
-                or not hopInProgress
-                or teleportStarted then
-                return
-            end
-
-            warn(
-                "[SERVER HOP] Teleport tidak dimulai setelah request; target diblokir dan mencoba server lain."
-            )
-
-            if lastTeleportTargetId then
-                blockedServerIds[lastTeleportTargetId] = true
-                lastTeleportTargetId = nil
-            end
-
-            hopInProgress = false
-            lastServerHopAt = 0
-            serverHop()
-        end)
 
     end
 end
@@ -3368,6 +3342,12 @@ print("======================================")
     print(
         "======================================"
     )
+
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
 
     local webhookCount = 0
 
