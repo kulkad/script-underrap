@@ -43,6 +43,8 @@ local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 local WEBHOOK_DELAY_SECONDS = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
+local SALES_HISTORY_DAYS = 6
+local MIN_SALES_COUNT = 20
 
 local SERVER_HOP_DELAY_SECONDS = 0
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
@@ -608,6 +610,12 @@ local Controllers =
 local Trading =
     Controllers:WaitForChild("Trading")
 
+local Net =
+    require(ReplicatedStorage.Packages.Net)
+
+local RAPHistoryRequest =
+    Net:RemoteFunction("RequestRAPHistory")
+
 local BoothController =
     require(Controllers.Booth.BoothController)
 
@@ -778,6 +786,188 @@ local function getRAP(itemType, itemKey)
         return nil
     end
 
+    return result
+end
+
+local SalesHistoryCache = {}
+
+local function getSalesHistory(itemType, itemKey)
+    if not itemType or not itemKey then
+        return nil
+    end
+
+    local cacheKey =
+        tostring(itemType)
+        .. ":"
+        .. tostring(itemKey)
+
+    if SalesHistoryCache[cacheKey] ~= nil then
+        return SalesHistoryCache[cacheKey] or nil
+    end
+
+    local endDate = DateTime.now()
+    local startDate = DateTime.fromUnixTimestamp(
+        endDate.UnixTimestamp - SALES_HISTORY_DAYS * 86400
+    )
+
+    local success, requestSuccess, points = pcall(function()
+        local invokeSuccess, history = RAPHistoryRequest:InvokeServer(
+            itemType,
+            itemKey,
+            startDate,
+            endDate
+        )
+
+        return invokeSuccess, history
+    end)
+
+    if not success or not requestSuccess or typeof(points) ~= "table" then
+        SalesHistoryCache[cacheKey] = false
+
+        if DEBUG then
+            warn("[SALES HISTORY] Request failed:", itemType, itemKey)
+        end
+
+        return nil
+    end
+
+    local totalSales = 0
+    local rapTotal = 0
+    local rapPointCount = 0
+    local daily = {}
+
+    for _, point in ipairs(points) do
+        if typeof(point) == "table"
+            and typeof(point.Date) == "DateTime"
+            and tonumber(point.RAP)
+            and tonumber(point.Count)
+        then
+            local utcDate = point.Date:ToUniversalTime()
+            local day = DateTime.fromUniversalTime(
+                utcDate.Year,
+                utcDate.Month,
+                utcDate.Day
+            )
+            local dayKey = day.UnixTimestamp
+            local dayData = daily[dayKey]
+
+            if not dayData then
+                dayData = {
+                    date = day,
+                    rapTotal = 0,
+                    pointCount = 0,
+                    sales = 0,
+                }
+                daily[dayKey] = dayData
+            end
+
+            local rapValue = tonumber(point.RAP)
+            local sales = tonumber(point.Count)
+
+            dayData.rapTotal += rapValue
+            dayData.pointCount += 1
+            dayData.sales += sales
+            totalSales += sales
+            rapTotal += rapValue
+            rapPointCount += 1
+        end
+    end
+
+    if rapPointCount == 0 then
+        SalesHistoryCache[cacheKey] = false
+        return nil
+    end
+
+    local chartLabels = {}
+    local chartValues = {}
+    local chartSales = {}
+    local dailySummary = {}
+    local dailyRows = {}
+
+    for _, dayData in pairs(daily) do
+        table.insert(dailyRows, dayData)
+    end
+
+    table.sort(dailyRows, function(left, right)
+        return left.date.UnixTimestamp < right.date.UnixTimestamp
+    end)
+
+    for _, dayData in ipairs(dailyRows) do
+        table.insert(
+            chartLabels,
+            dayData.date:FormatUniversalTime("MMM D", "en-us")
+        )
+        table.insert(
+            chartValues,
+            math.round(dayData.rapTotal / dayData.pointCount)
+        )
+        table.insert(chartSales, dayData.sales)
+        table.insert(
+            dailySummary,
+            string.format(
+                "%s: `%d sales` | Avg RAP: `%d`",
+                dayData.date:FormatUniversalTime("MMM D", "en-us"),
+                dayData.sales,
+                math.round(dayData.rapTotal / dayData.pointCount)
+            )
+        )
+    end
+
+    local chartConfig = {
+        type = "line",
+        data = {
+            labels = chartLabels,
+            datasets = {
+                {
+                    label = "Rata-rata RAP",
+                    data = chartValues,
+                    borderColor = "#2dd4a3",
+                    backgroundColor = "rgba(45,212,163,0.12)",
+                    fill = true,
+                    tension = 0.25,
+                    pointRadius = 3,
+                    pointHoverRadius = 6,
+                },
+            },
+        },
+        options = {
+            responsive = true,
+            maintainAspectRatio = false,
+            plugins = {
+                title = {
+                    display = true,
+                    text = "Rata-rata RAP per Hari",
+                },
+                tooltip = {
+                    callbacks = {
+                        label = "function(context) { return 'RAP: ' + context.parsed.y + ' | Sales: ' + "
+                            .. HttpService:JSONEncode(chartSales)
+                            .. "[context.dataIndex]; }",
+                    },
+                },
+            },
+            scales = {
+                y = {
+                    beginAtZero = false,
+                },
+            },
+        },
+    }
+
+    local chartUrl =
+        "https://quickchart.io/chart?width=900&height=460&format=png&c="
+        .. HttpService:UrlEncode(
+            HttpService:JSONEncode(chartConfig)
+        )
+
+    local result = {
+        totalSales = totalSales,
+        averageRap = math.round(rapTotal / rapPointCount),
+        chartUrl = chartUrl,
+        dailySummary = dailySummary,
+    }
+
+    SalesHistoryCache[cacheKey] = result
     return result
 end
 
@@ -1958,6 +2148,17 @@ local function sendWebhook(
         inline = false,
     })
 
+    if listing.salesHistory then
+        table.insert(fields, {
+            name = "Data per Hari (grafik di bawah)",
+            value = table.concat(
+                listing.salesHistory.dailySummary,
+                "\n"
+            ),
+            inline = false,
+        })
+    end
+
     --==================================================
     -- SERVER
     --==================================================
@@ -2033,6 +2234,14 @@ local function sendWebhook(
                 itemImageUrl
             )
         end
+    end
+
+    if listing.salesHistory
+        and listing.salesHistory.chartUrl then
+
+        embed.image = {
+            url = listing.salesHistory.chartUrl,
+        }
     end
 
     local payload = {
@@ -2365,6 +2574,30 @@ local function inspectListing(
         DEEP_UNDERRAP_PERCENT
     and not boosted
 
+    local salesHistory
+
+    if (isUnderrap or isNuke) and not boosted then
+        salesHistory = getSalesHistory(
+            itemType,
+            rapKey
+        )
+
+        if tierName == "LOW"
+            and (not salesHistory
+                or salesHistory.totalSales <= MIN_SALES_COUNT) then
+            if DEBUG then
+                warn(
+                    "[LOW SALES FILTER] Skipped:",
+                    itemName,
+                    "total sales <=",
+                    MIN_SALES_COUNT
+                )
+            end
+
+            return
+        end
+    end
+
     --==================================================
     -- DEBUG
     --==================================================
@@ -2462,6 +2695,7 @@ local function inspectListing(
 
             boothClaimed = boothMetadata.claimed,
             boothLocation = boothMetadata.location,
+            salesHistory = salesHistory,
         }
     end
 end
