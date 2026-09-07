@@ -8,6 +8,8 @@
 --// 6. Server hop memakai Roblox Public Server API
 --// 7. Menangani TeleportInitFailed
 --// + AUTO-BUY (by request)
+--// + SALES HISTORY CHART
+--// + COOLDOWN DIPERBESAR & DELAY RANDOM UNTUK MENGHINDARI KICK
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -35,10 +37,11 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_MIN = 20
-local SAFE_SCAN_COOLDOWN_MAX = 35
-local SAFE_HOP_COOLDOWN_MIN = 30
-local SAFE_HOP_COOLDOWN_MAX = 50
+-- ===== UBAH COOLDOWN AGAR LEBIH AMAN =====
+local SAFE_SCAN_COOLDOWN_MIN = 30   -- sebelumnya 20
+local SAFE_SCAN_COOLDOWN_MAX = 60   -- sebelumnya 35
+local SAFE_HOP_COOLDOWN_MIN = 45    -- sebelumnya 30
+local SAFE_HOP_COOLDOWN_MAX = 90    -- sebelumnya 50
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 20
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
@@ -48,7 +51,7 @@ local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 0
+local SERVER_HOP_DELAY_SECONDS = 0    -- akan diacak di dalam fungsi
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
@@ -76,7 +79,6 @@ local preparedServerId = nil
 local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
 
 local AUTO_BUY_LIST = {
-    -- Dari list baru
     ["Pulseheart Set"] = 4000,
     ["Cosmic Wrath"] = 34000,
     ["Lily Katana"] = 4200,
@@ -150,8 +152,6 @@ local AUTO_BUY_LIST = {
     ["Green Ninja Katana"] = 4800,
     ["Red Ninja Katana"] = 5700,
     ["Blue Ninja katana"] = 5900,
-
-    -- Dari list sebelumnya (dengan harga termurah untuk duplikat)
     ["Void Blade"] = 1700,
     ["Abyssal Blade"] = 1300,
     ["Cloud"] = 22000,
@@ -165,7 +165,7 @@ local AUTO_BUY_LIST = {
     ["Valentine Hearts"] = 8700,
     ["Rose Gift"] = 9500,
     ["Love For You"] = 12500,
-    ["Chroma Blade"] = 13900,   -- lebih murah dari 14000
+    ["Chroma Blade"] = 13900,
     ["King Blade"] = 12000,
     ["Puppy"] = 16000,
     ["Flaming Sword"] = 3100,
@@ -185,27 +185,26 @@ local AUTO_BUY_LIST = {
     ["Zombie Slide"] = 100000,
     ["Prince Blade"] = 2550,
     ["Slime"] = 7500,
-    ["Aligned Constellation"] = 4100,   -- lebih murah dari 4200
+    ["Aligned Constellation"] = 4100,
     ["Dancinha"] = 3000,
     ["Riftflare Katana"] = 3000,
-    ["Fox Katana"] = 5500,   -- lebih murah dari 5700
+    ["Fox Katana"] = 5500,
     ["Milk & Cookies"] = 3000,
-    ["Kraken"] = 6900,       -- lebih murah dari 7000
-    ["Sakura's Requiem"] = 3900,  -- lebih murah dari 3900
+    ["Kraken"] = 6900,
+    ["Sakura's Requiem"] = 3900,
     ["Hitman"] = 5300,
     ["Angel Greatsword"] = 3000,
     ["Bunny"] = 120000,
     ["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 28000,   -- lebih murah dari 32000
+    ["Icebound Dominus"] = 28000,
     ["Regret Blades"] = 19000,
-    ["Eternum Galepiercer"] = 8000, -- lebih murah dari 8500
+    ["Eternum Galepiercer"] = 8000,
     ["Phantom Chase"] = 62,
 }
 
 --==================================================
 -- WEBHOOKS
 --==================================================
--- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
 local WEBHOOKS = {
     LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
@@ -218,7 +217,7 @@ local WEBHOOKS = {
 }
 
 --==================================================
--- MANUAL BOOSTED LIST
+-- MANUAL BOOSTED LIST (tetap sama)
 --==================================================
 
 local BOOSTED_ITEMS = {
@@ -1256,8 +1255,6 @@ local function getServerLink()
     )
 end
 
--- BoothListings has changed shape between game updates, so accept common
--- field names and keep the webhook useful when optional metadata is absent.
 local function normalizeId(value)
     local numericValue = tonumber(value)
     return numericValue and tostring(numericValue) or tostring(value)
@@ -1293,60 +1290,14 @@ local function getRelativeBoothLocation(spawn, position)
         return nil
     end
 
-    -- Posisi booth relatif terhadap spawn
     local offset = spawn.CFrame:PointToObjectSpace(position)
-
-    -- Jarak booth dari spawn
     local distance = (position - spawn.Position).Magnitude
 
-    --==================================================
-    -- RING / AREA
-    --==================================================
-
-    -- Ring Dalam = area tengah saja
-    -- Ring Luar  = area setelah ring tengah,
-    -- termasuk area belakang karpet merah.
-    --
-    -- Kalau ternyata batasnya sedikit terlalu besar/kecil,
-    -- cukup ubah angka ini.
     local INNER_RADIUS = 65
-
-    local ring
-
-    if distance <= INNER_RADIUS then
-        ring = "Dalam"
-    else
-        ring = "Luar"
-    end
-
-    --==================================================
-    -- DIRECTION
-    --==================================================
-
-    -- Berdasarkan posisi map:
-    --
-    --          ATAS
-    --     ATAS KIRI | ATAS KANAN
-    --          SPAWN
-    --       KIRI | KANAN
-    --     BAWAH KIRI | BAWAH KANAN
-    --          BAWAH
-    --
-    -- X:
-    -- + = kanan
-    -- - = kiri
-    --
-    -- Z:
-    -- - = atas / depan
-    -- + = bawah / belakang
+    local ring = distance <= INNER_RADIUS and "Dalam" or "Luar"
 
     local x = offset.X
     local z = offset.Z
-
-    -- 0°  = kanan
-    -- 90° = atas
-    -- 180° = kiri
-    -- 270° = bawah
     local angle = math.deg(math.atan2(-z, x))
 
     if angle < 0 then
@@ -1355,46 +1306,23 @@ local function getRelativeBoothLocation(spawn, position)
 
     local direction
 
-    --==================================================
-    -- 8 DIRECTIONS
-    --==================================================
-
     if angle >= 337.5 or angle < 22.5 then
-
         direction = "Kanan"
-
     elseif angle >= 22.5 and angle < 67.5 then
-
         direction = "Atas Kanan"
-
     elseif angle >= 67.5 and angle < 112.5 then
-
         direction = "Atas"
-
     elseif angle >= 112.5 and angle < 157.5 then
-
         direction = "Atas Kiri"
-
     elseif angle >= 157.5 and angle < 202.5 then
-
         direction = "Kiri"
-
     elseif angle >= 202.5 and angle < 247.5 then
-
         direction = "Bawah Kiri"
-
     elseif angle >= 247.5 and angle < 292.5 then
-
         direction = "Bawah"
-
     else
-
         direction = "Bawah Kanan"
     end
-
-    --==================================================
-    -- FINAL LOCATION
-    --==================================================
 
     return string.format(
         "%s • %s • %.0f studs",
@@ -1405,14 +1333,12 @@ local function getRelativeBoothLocation(spawn, position)
 end
 
 local function buildBoothIndex()
-
     local boothsByOwnerId = {}
     local spawn = getSpawnPart()
 
     for _, booth in ipairs(
         CollectionService:GetTagged("TradeBoothStand")
     ) do
-
         local ownerId =
             booth:GetAttribute("Owner")
 
@@ -1436,28 +1362,22 @@ local function buildBoothIndex()
         end
 
         if DEBUG then
-
             print(
                 "================================"
             )
-
             print(
                 "[BOOTH DEBUG]",
                 booth:GetFullName()
             )
-
             print(
                 "Owner:",
                 tostring(ownerId)
             )
-
             print(
                 "Attributes:"
             )
-
             for attributeName, attributeValue
                 in pairs(booth:GetAttributes()) do
-
                 print(
                     "   ",
                     attributeName,
@@ -1465,21 +1385,18 @@ local function buildBoothIndex()
                     tostring(attributeValue)
                 )
             end
-
             print(
                 "================================"
             )
         end
 
         if ownerId ~= nil then
-
             boothsByOwnerId[normalizeId(ownerId)] = {
-    location = location,
-    position = position,
-    booth = booth,
-    ownerId = ownerId,
-}
-
+                location = location,
+                position = position,
+                booth = booth,
+                ownerId = ownerId,
+            }
         end
     end
 
@@ -1503,7 +1420,6 @@ local function getBoothMetadata(
 
     if not location
         and typeof(listing) == "table" then
-
         location =
             listing.BoothLocation
             or listing.Location
@@ -1511,7 +1427,6 @@ local function getBoothMetadata(
 
     if not location
         or tostring(location) == "" then
-
         location = "Lokasi tidak tersedia"
     end
 
@@ -1617,7 +1532,6 @@ local function getEmoteDisplayName(itemName)
 
     if typeof(emoteName) == "string"
         and emoteName ~= "" then
-
         return emoteName
     end
 
@@ -1626,17 +1540,6 @@ end
 
 --==================================================
 -- SWORD IMAGE
---==================================================
--- Contoh hasil model:
---
--- Dual Astral Vanguard.1 | MeshPart
--- MeshId:
--- rbxassetid://443853663
---
--- TextureID:
--- rbxassetid://443853675
---
--- TextureID akan dipakai sebagai gambar.
 --==================================================
 
 local SwordImageCache = {}
@@ -1738,7 +1641,6 @@ local function getAssetThumbnailUrl(assetId)
 end
 
 local function getItemImageUrl(itemType, itemKey)
-
     if not itemType or not itemKey then
         return nil
     end
@@ -1810,45 +1712,14 @@ local function getItemImageUrl(itemType, itemKey)
     end
 
     local iconId = nil
-local textureId = nil
+    local textureId = nil
 
---==================================================
--- SEARCH ATTRIBUTES
---==================================================
-
-for attributeName, attributeValue in pairs(
-    imageInstance:GetAttributes()
-) do
-    local normalizedName = string.lower(
-        tostring(attributeName)
-    )
-
-    if string.find(normalizedName, "icon")
-        or string.find(normalizedName, "image")
-        or string.find(normalizedName, "thumbnail") then
-
-        iconId =
-            iconId
-            or assetIdFromString(attributeValue)
-    end
-end
-
---==================================================
--- SEARCH IMAGE VALUES
---==================================================
-
-for _, obj in ipairs(
-    imageInstance:GetDescendants()
-) do
-
-    -- IMPORTANT:
-    -- Jangan membaca SurfaceAppearance.ColorMap.
-    -- Property tersebut membutuhkan Plugin capability.
-
-    if obj:IsA("StringValue") then
-
-        local normalizedName =
-            string.lower(obj.Name)
+    for attributeName, attributeValue in pairs(
+        imageInstance:GetAttributes()
+    ) do
+        local normalizedName = string.lower(
+            tostring(attributeName)
+        )
 
         if string.find(normalizedName, "icon")
             or string.find(normalizedName, "image")
@@ -1856,37 +1727,48 @@ for _, obj in ipairs(
 
             iconId =
                 iconId
-                or assetIdFromString(obj.Value)
+                or assetIdFromString(attributeValue)
         end
-
-    elseif obj:IsA("ImageLabel")
-        or obj:IsA("ImageButton") then
-
-        iconId =
-            iconId
-            or assetIdFromString(obj.Image)
     end
-end
-
-if DEBUG and iconId then
-    print(
-        "[ITEM IMAGE] Appearance assets:",
-        cacheKey,
-        "Icon:",
-        tostring(iconId)
-    )
-end
-
-    --==================================================
-    -- SEARCH MESH PARTS
-    --==================================================
 
     for _, obj in ipairs(
         imageInstance:GetDescendants()
     ) do
+        if obj:IsA("StringValue") then
+            local normalizedName =
+                string.lower(obj.Name)
 
+            if string.find(normalizedName, "icon")
+                or string.find(normalizedName, "image")
+                or string.find(normalizedName, "thumbnail") then
+
+                iconId =
+                    iconId
+                    or assetIdFromString(obj.Value)
+            end
+
+        elseif obj:IsA("ImageLabel")
+            or obj:IsA("ImageButton") then
+
+            iconId =
+                iconId
+                or assetIdFromString(obj.Image)
+        end
+    end
+
+    if DEBUG and iconId then
+        print(
+            "[ITEM IMAGE] Appearance assets:",
+            cacheKey,
+            "Icon:",
+            tostring(iconId)
+        )
+    end
+
+    for _, obj in ipairs(
+        imageInstance:GetDescendants()
+    ) do
         if obj:IsA("MeshPart") then
-
             local meshValue = obj.MeshId
             local textureValue = obj.TextureID
 
@@ -1895,7 +1777,6 @@ end
                 or assetIdFromString(textureValue)
 
             if textureId then
-
                 if DEBUG then
                     print(
                         "[ITEM IMAGE]",
@@ -1926,20 +1807,10 @@ end
         end
     end
 
-    --==================================================
-    -- SEARCH SPECIAL MESH
-    --==================================================
-
-    --==================================================
-    -- FALLBACK: DECAL / TEXTURE
-    --==================================================
-
     if not textureId then
-
         for _, obj in ipairs(
             imageInstance:GetDescendants()
         ) do
-
             if obj:IsA("Decal")
                 or obj:IsA("Texture") then
 
@@ -1950,7 +1821,6 @@ end
                     assetIdFromString(value)
 
                 if id then
-
                     textureId = id
 
                     if DEBUG then
@@ -1971,11 +1841,10 @@ end
     end
 
     local imageAssetId =
-    iconId
-    or textureId
+        iconId
+        or textureId
 
     if not imageAssetId then
-
         if DEBUG then
             warn(
                 "[ITEM IMAGE] No image asset found:",
@@ -1987,10 +1856,6 @@ end
         SwordImageCache[cacheKey] = false
         return nil
     end
-
-    --==================================================
-    -- ROBLOX THUMBNAILS API
-    --==================================================
 
     local imageUrl =
         getAssetThumbnailUrl(imageAssetId)
@@ -2039,7 +1904,6 @@ local function isBoosted(itemType, itemName)
 
     if excludedTypes
         and excludedTypes[itemType] then
-
         return false
     end
 
@@ -2062,7 +1926,6 @@ local function getNukeLimit(itemType, itemName)
         return nil
     end
 
-    -- Semua item di NUKE_ITEMS hanya berlaku untuk Sword
     if itemType ~= "Sword" then
         return nil
     end
@@ -2107,10 +1970,9 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
         return false
     end
 
-    -- Konversi ownerId ke Player object kalau online
     local numericOwnerId = tonumber(ownerId)
     local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
+    local ownerArg = player or ownerId
 
     local success, result = pcall(function()
         return BoothController:PurchaseListing(ownerArg, listingId)
@@ -2140,10 +2002,8 @@ local function sendWebhook(webhookType, ownerId, listing)
         return false
     end
 
-    -- ✅ Tambahkan delay acak di sini
+    -- Delay acak sebelum kirim webhook (1.5-3.5 detik)
     task.wait(randomDelay(1.5, 3.5))
-
-    -- ... sisanya tetap sama
 
     local ownerInfo =
         getOwnerInfo(ownerId)
@@ -2158,23 +2018,17 @@ local function sendWebhook(webhookType, ownerId, listing)
         "🚨 UNDER VALUE ITEM DETECTED"
 
     if webhookType == "BOOSTED" then
-
         title =
             "⚡ BOOSTED ITEM DETECTED"
-
     elseif webhookType == "NUKE" then
-
         title =
             "☢️ NUKE ITEM DETECTED"
-
     elseif webhookType == "DEEP_UNDERRAP" then
-
         title =
             "🔥 50%+ UNDERRAP DETECTED"
     end
 
     local fields = {
-
         {
             name = "Seller",
             value =
@@ -2183,7 +2037,6 @@ local function sendWebhook(webhookType, ownerId, listing)
                 ),
             inline = true,
         },
-
         {
             name = "Item",
             value = string.format(
@@ -2192,7 +2045,6 @@ local function sendWebhook(webhookType, ownerId, listing)
             ),
             inline = true,
         },
-
         {
             name = "Type",
             value = string.format(
@@ -2201,7 +2053,6 @@ local function sendWebhook(webhookType, ownerId, listing)
             ),
             inline = true,
         },
-
         {
             name = "RAP",
             value = string.format(
@@ -2210,7 +2061,6 @@ local function sendWebhook(webhookType, ownerId, listing)
             ),
             inline = true,
         },
-
         {
             name = "Price",
             value = string.format(
@@ -2221,12 +2071,7 @@ local function sendWebhook(webhookType, ownerId, listing)
         },
     }
 
-    --==================================================
-    -- NUKE
-    --==================================================
-
     if webhookType == "NUKE" then
-
         table.insert(fields, {
             name = "Nuke Limit",
             value = string.format(
@@ -2237,7 +2082,6 @@ local function sendWebhook(webhookType, ownerId, listing)
             ),
             inline = true,
         })
-
         table.insert(fields, {
             name = "Profit",
             value = string.format(
@@ -2246,13 +2090,7 @@ local function sendWebhook(webhookType, ownerId, listing)
             ),
             inline = true,
         })
-
-    --==================================================
-    -- BOOSTED
-    --==================================================
-
     elseif webhookType == "BOOSTED" then
-
         table.insert(fields, {
             name = "Profit",
             value = string.format(
@@ -2261,13 +2099,7 @@ local function sendWebhook(webhookType, ownerId, listing)
             ),
             inline = true,
         })
-
-    --==================================================
-    -- NORMAL / DEEP
-    --==================================================
-
     else
-
         table.insert(fields, {
             name = "Profit",
             value = string.format(
@@ -2294,22 +2126,13 @@ local function sendWebhook(webhookType, ownerId, listing)
         inline = false,
     })
 
-    --==================================================
-    -- SERVER
-    --==================================================
-
     table.insert(fields, {
         name = "Server Link",
         value = getServerLink(),
         inline = false,
     })
 
-    --==================================================
-    -- PROFILE
-    --==================================================
-
     if ownerProfileUrl then
-
         table.insert(fields, {
             name = "Profile",
             value = ownerProfileUrl,
@@ -2317,32 +2140,20 @@ local function sendWebhook(webhookType, ownerId, listing)
         })
     end
 
-    --==================================================
-    -- IMAGE
-    --==================================================
-
     local itemImageUrl =
         getItemImageUrl(
             listing.itemType,
             listing.itemKey
         )
 
-    --==================================================
-    -- PAYLOAD
-    --==================================================
-
     local embed = {
         title = title,
-
         timestamp = DateTime.now():ToIsoDate(),
-
         color =
             getTierColor(
                 webhookType
             ),
-
         fields = fields,
-
         footer = {
             text =
                 "Type: "
@@ -2352,12 +2163,7 @@ local function sendWebhook(webhookType, ownerId, listing)
         },
     }
 
-    --==================================================
-    -- ADD SWORD IMAGE
-    --==================================================
-
     if itemImageUrl then
-
         embed.thumbnail = {
             url = itemImageUrl,
         }
@@ -2410,7 +2216,6 @@ local function sendWebhook(webhookType, ownerId, listing)
     end
 
     if DEBUG then
-
         print(
             "[WEBHOOK SENT]",
             webhookType,
@@ -2435,21 +2240,12 @@ local function inspectListing(
     listing,
     boothsByOwnerId
 )
-
     if typeof(listing) ~= "table" then
         return
     end
 
-    --==================================================
-    -- RAW ITEM KEY
-    --==================================================
-
     local itemKey =
         getListingItemKey(listing)
-
-    --==================================================
-    -- ITEM TYPE
-    --==================================================
 
     local itemType =
         listing.ItemType
@@ -2459,16 +2255,11 @@ local function inspectListing(
         or listing.Category
         or listing.category
 
-    --==================================================
-    -- PRICE
-    --==================================================
-
     local price =
         listing.Price
         or listing.price
 
     if DEBUG then
-
         print(
             "[LISTING]",
             "Owner =",
@@ -2489,7 +2280,6 @@ local function inspectListing(
     end
 
     if not itemType then
-
         if DEBUG then
             warn(
                 "[NO ITEM TYPE]",
@@ -2500,14 +2290,9 @@ local function inspectListing(
         return
     end
 
-    --==================================================
-    -- DISPLAY NAME
-    --==================================================
-
     local displayName
 
     if itemType == "Emote" then
-
         displayName =
             getEmoteDisplayName(
                 itemKey
@@ -2523,9 +2308,7 @@ local function inspectListing(
                 tostring(displayName)
             )
         end
-
     else
-
         if typeof(listing.DisplayName)
             == "string" then
 
@@ -2584,14 +2367,9 @@ local function inspectListing(
         boothsByOwnerId
     )
 
-    --==================================================
-    -- RAP KEY
-    --==================================================
-
     local rapKey = itemKey
 
     if typeof(listing.Item) == "table" then
-
         local filteredKey =
             getFilteredItemKey(
                 itemType,
@@ -2604,7 +2382,6 @@ local function inspectListing(
     end
 
     if DEBUG then
-
         print(
             "[RAP KEY]",
             tostring(itemName),
@@ -2614,7 +2391,6 @@ local function inspectListing(
     end
 
     if not rapKey then
-
         warn(
             "[NO RAP KEY]",
             itemName
@@ -2623,10 +2399,6 @@ local function inspectListing(
         return
     end
 
-    --==================================================
-    -- GET RAP
-    --==================================================
-
     local rap =
         getRAP(
             itemType,
@@ -2634,9 +2406,7 @@ local function inspectListing(
         )
 
     if not rap then
-
         if DEBUG then
-
             warn(
                 "[NO RAP]",
                 itemName,
@@ -2650,10 +2420,6 @@ local function inspectListing(
         return
     end
 
-    --==================================================
-    -- DISCOUNT
-    --==================================================
-
     local discount =
         ((rap - price) / rap)
         * 100
@@ -2662,9 +2428,7 @@ local function inspectListing(
         getRAPTier(rap)
 
     if not tierName then
-
         if DEBUG then
-
             print(
                 "[SKIP] RAP tidak masuk tier:",
                 rap,
@@ -2674,10 +2438,6 @@ local function inspectListing(
 
         return
     end
-
-    --==================================================
-    -- SPECIAL CHECK
-    --==================================================
 
     local boostedCandidate =
         isBoosted(
@@ -2703,11 +2463,11 @@ local function inspectListing(
         and isUnderrap
 
     local isDeepUnderrap =
-    isUnderrap
-    and rap < 1000000
-    and discount >
-        DEEP_UNDERRAP_PERCENT
-    and not boosted
+        isUnderrap
+        and rap < 1000000
+        and discount >
+            DEEP_UNDERRAP_PERCENT
+        and not boosted
 
     local salesHistory
 
@@ -2733,10 +2493,6 @@ local function inspectListing(
         end
     end
 
-    --==================================================
-    -- DEBUG
-    --==================================================
-
     print(
         string.format(
             "[ITEM] %s | Price: %s | RAP: %s | Tier: %s | %.2f%% below RAP",
@@ -2749,7 +2505,6 @@ local function inspectListing(
     )
 
     if boosted then
-
         print(
             "⚡ BOOSTED:",
             itemName,
@@ -2761,7 +2516,6 @@ local function inspectListing(
     end
 
     if isNuke then
-
         print(
             "☢️ NUKE:",
             itemName,
@@ -2775,7 +2529,6 @@ local function inspectListing(
     end
 
     if isUnderrap then
-
         print(
             "🔥 UNDERRAP:",
             itemName,
@@ -2793,41 +2546,25 @@ local function inspectListing(
         )
     end
 
-    --==================================================
-    -- RETURN
-    --==================================================
-
     if isUnderrap
         or boosted
         or isNuke then
 
         return {
             itemName = itemName,
-
-            -- PENTING:
-            -- itemKey tetap internal key.
             itemKey = itemKey,
-
             rapKey = rapKey,
-
             itemType = itemType,
-
             price = price,
             rap = rap,
-
             discount = discount,
             profit = rap - price,
-
             tierName = tierName,
-
             boosted = boosted,
             nuke = isNuke,
-
             nukeLimit = nukeLimit,
-
             deepUnderrap =
                 isDeepUnderrap,
-
             boothClaimed = boothMetadata.claimed,
             boothLocation = boothMetadata.location,
             salesHistory = salesHistory,
@@ -2840,13 +2577,15 @@ end
 --==================================================
 
 local function getNewServerOnce()
-
     if not REQUEST then
         warn(
             "[SERVER HOP] Request function tidak tersedia."
         )
         return nil
     end
+
+    -- ===== TAMBAH DELAY ACAK SEBELUM AMBIL SERVER =====
+    task.wait(randomDelay(3, 7))
 
     local preferredServers = {}
     local fallbackServers = {}
@@ -2995,15 +2734,13 @@ local function getNewServer()
                 .. ")."
             )
 
-            task.wait(
-                SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS
-            )
+            -- ===== DELAY RETRY DIPERPANJANG (5-10 detik) =====
+            task.wait(randomDelay(5, 10))
         end
     end
 
     return nil
 end
-
 
 --==================================================
 -- TELEPORT FAILED HANDLER
@@ -3017,7 +2754,6 @@ TeleportService.TeleportInitFailed:Connect(
         teleportResult,
         errorMessage
     )
-
         if player ~= LocalPlayer then
             return
         end
@@ -3045,7 +2781,8 @@ TeleportService.TeleportInitFailed:Connect(
             return
         end
 
-        task.delay(2, function()
+        -- ===== DELAY RETRY LEBIH LAMA (5-10 detik) =====
+        task.delay(randomDelay(5, 10), function()
             pcall(function()
                 serverHop()
             end)
@@ -3058,13 +2795,10 @@ TeleportService.TeleportInitFailed:Connect(
 --==================================================
 
 serverHop = function(serverId)
-
     if not ENABLE_SERVER_HOP then
-
         print(
             "[Server Hop] Disabled."
         )
-
         return
     end
 
@@ -3085,7 +2819,6 @@ serverHop = function(serverId)
     print(
         "======================================"
     )
-
     print(
         "[Server Hop] Semua webhook sudah dikirim."
     )
@@ -3123,7 +2856,7 @@ serverHop = function(serverId)
         )
 
         task.delay(
-            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            randomDelay(5, 10),
             function()
                 if not hopInProgress then
                     serverHop()
@@ -3141,19 +2874,17 @@ serverHop = function(serverId)
         tostring(serverId)
     )
 
-    -- Delay acak sebelum teleport (2 - 5 detik)
-task.wait(randomDelay(2, 5))
+    -- ===== DELAY ACAK SEBELUM TELEPORT (3-6 detik) =====
+    task.wait(randomDelay(3, 6))
 
     local success, result =
         pcall(function()
-
             TeleportService:
                 TeleportToPlaceInstance(
                     game.PlaceId,
                     serverId,
                     LocalPlayer
                 )
-
         end)
 
     if not success then
@@ -3180,20 +2911,17 @@ task.wait(randomDelay(2, 5))
         )
 
         task.delay(
-            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
+            randomDelay(5, 10),
             function()
                 if not hopInProgress then
                     serverHop()
                 end
             end
         )
-
     else
-
         print(
             "[Server Hop] Teleport request berhasil."
         )
-
     end
 end
 
@@ -3202,7 +2930,6 @@ end
 --==================================================
 
 local function scan()
-
     if scanInProgress then
         print("[Scanner] Scan masih berjalan, skip.")
         return
@@ -3219,24 +2946,20 @@ local function scan()
     print(
         "======================================"
     )
-
     print(
         "[Scanner] Starting booth scan..."
     )
-
     print(
         "======================================"
     )
 
-    --==================================================
-    -- GET BOOTH DATA
-    --==================================================
+    -- ===== DELAY ACAK SEBELUM SCAN (2-5 detik) =====
+    task.wait(randomDelay(2, 5))
 
     local data =
         getLoadedBoothData()
 
     if not data then
-
         warn(
             "[Scanner] BoothListings returned nil."
         )
@@ -3251,53 +2974,51 @@ local function scan()
 
     local boothsByOwnerId = buildBoothIndex()
     print("======================================")
-print("[BOOTH INDEX] Claimed booths:")
-print("======================================")
+    print("[BOOTH INDEX] Claimed booths:")
+    print("======================================")
 
-for ownerId, boothData in pairs(boothsByOwnerId) do
-    print(
-        "[CLAIMED]",
-        "Owner:",
-        tostring(ownerId),
-        "| Booth:",
-        boothData.booth
-            and boothData.booth:GetFullName()
-            or "nil"
-    )
-end
+    for ownerId, boothData in pairs(boothsByOwnerId) do
+        print(
+            "[CLAIMED]",
+            "Owner:",
+            tostring(ownerId),
+            "| Booth:",
+            boothData.booth
+                and boothData.booth:GetFullName()
+                or "nil"
+        )
+    end
 
-print("======================================")
+    print("======================================")
 
     print(
         "[Scanner] Booth listings loaded:",
         loadedListingCount
     )
     print("======================================")
-print("[LISTING -> BOOTH MATCH TEST]")
-print("======================================")
+    print("[LISTING -> BOOTH MATCH TEST]")
+    print("======================================")
 
-for ownerId, listings in pairs(data) do
+    for ownerId, listings in pairs(data) do
+        local boothData =
+            boothsByOwnerId[
+                normalizeId(ownerId)
+            ]
 
-    local boothData =
-        boothsByOwnerId[
-            normalizeId(ownerId)
-        ]
+        print(
+            "[OWNER]",
+            tostring(ownerId),
+            "| Booth:",
+            boothData
+                and boothData.booth
+                and boothData.booth:GetFullName()
+                or "NOT FOUND"
+        )
+    end
 
-    print(
-        "[OWNER]",
-        tostring(ownerId),
-        "| Booth:",
-        boothData
-            and boothData.booth
-            and boothData.booth:GetFullName()
-            or "NOT FOUND"
-    )
-end
-
-print("======================================")
+    print("======================================")
 
     if loadedListingCount == 0 then
-
         warn("[Scanner] Tidak ada booth yang termuat; memulai server hop.")
 
         serverHop()
@@ -3305,17 +3026,12 @@ print("======================================")
         return
     end
 
-    --==================================================
-    -- RAW DUMP
-    --==================================================
-
     if DEBUG
         and DUMP_RAW_DATA then
 
         print(
             "[Scanner] RAW BoothListings:"
         )
-
         print(
             dump(data)
         )
@@ -3326,14 +3042,8 @@ print("======================================")
     local seenListings = {}
     local groupedListings = {}
 
-    --==================================================
-    -- SCAN ALL BOOTHS
-    --==================================================
-
     for ownerId, listings in pairs(data) do
-
         if typeof(listings) == "table" then
-
             for listingId, listing
                 in pairs(listings) do
 
@@ -3359,12 +3069,7 @@ print("======================================")
                     )
 
                 if result then
-
                     detectedCount += 1
-
-                    --==================================================
-                    -- AUTO-BUY CHECK
-                    --==================================================
 
                     if AUTO_BUY_ENABLED then
                         local maxPrice = AUTO_BUY_LIST[result.itemName]
@@ -3386,23 +3091,16 @@ print("======================================")
         end
     end
 
-    --==================================================
-    -- WEBHOOK PHASE
-    --==================================================
-
     print(
         "======================================"
     )
-
     print(
         "[Webhook] Starting webhook phase..."
     )
-
     print(
         "[Webhook] Detected:",
         detectedCount
     )
-
     print(
         "======================================"
     )
@@ -3419,12 +3117,7 @@ print("======================================")
                 break
             end
 
-            --==========================================
-            -- NUKE
-            --==========================================
-
             if listing.nuke then
-
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
@@ -3443,12 +3136,7 @@ print("======================================")
                 task.wait(randomDelay(1.5, 3.5))
             end
 
-            --==========================================
-            -- BOOSTED
-            --==========================================
-
             if listing.boosted then
-
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
@@ -3469,10 +3157,6 @@ print("======================================")
                 )
             end
 
-            --==========================================
-            -- NORMAL UNDERRAP
-            --==========================================
-
             if listing.price < listing.rap
                 and listing.discount >=
                     getUnderrapThreshold(
@@ -3484,12 +3168,9 @@ print("======================================")
                 local webhookType
 
                 if listing.deepUnderrap then
-
                     webhookType =
                         "DEEP_UNDERRAP"
-
                 else
-
                     webhookType =
                         listing.tierName
                 end
@@ -3516,58 +3197,41 @@ print("======================================")
         end
     end
 
-    --==================================================
-    -- SCAN SUMMARY
-    --==================================================
-
     print(
         "======================================"
     )
-
     print(
         "[Scanner] Listings scanned:",
         count
     )
-
     print(
         "[Scanner] Underrap/special detected:",
         detectedCount
     )
-
     print(
         "[Webhook] Webhooks processed:",
         webhookCount
     )
-
     print(
         "======================================"
     )
 
-    --==================================================
-    -- SERVER HOP ONLY AFTER WEBHOOK
-    --==================================================
-
     if ENABLE_SERVER_HOP then
-
         print(
             "[Scanner] Webhook phase selesai."
         )
-
         if SAFE_MODE then
             print(
                 "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
             )
         end
-
         print(
             "[Scanner] Starting server hop..."
         )
 
         preparedServerId = nil
         serverHop()
-
     else
-
         print(
             "[Server Hop] Disabled."
         )
