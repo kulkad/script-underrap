@@ -7,7 +7,7 @@
 --// 5. Setelah webhook selesai, scanner baru server hop
 --// 6. Server hop memakai Roblox Public Server API
 --// 7. Menangani TeleportInitFailed
-
+--// + AUTO-BUY (by request)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -66,6 +66,33 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
+
+--==================================================
+-- AUTO-BUY CONFIG
+--==================================================
+
+local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
+
+local AUTO_BUY_LIST = {
+    -- Nama item (persis seperti di game) : harga maksimal yang mau lo bayar
+    ["Eternal Piercer"] = 27000,
+    ["Love For You"] = 12000,
+    ["Winter Wolf"] = 18000,
+    ["Kitty Katana"] = 12600,
+    ["Moonflower Katana"] = 17000,
+    ["Bunny"] = 120000,
+    ["Ranked Season 15 Top 50"] = 31000,
+    ["Icebound Dominus"] = 28000,
+    ["Regret Blades"] = 19000,
+    ["Celestial Whisper"] = 21000,
+    ["Royal Duality"] = 40000,
+    ["Queen Blade"] = 27000,
+    ["Eternum Galepiercer"] = 8000,
+    ["Zombie Slide"] = 100000,
+    ["Prince Blade"] = 2400,
+    ["Void Blade"] = 1600,
+    ["Sparkblade"] = 2,
+}
 
 --==================================================
 -- WEBHOOKS
@@ -1956,6 +1983,35 @@ local function getTierColor(tierName)
 end
 
 --==================================================
+-- AUTO-BUY
+--==================================================
+
+local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
+    if not AUTO_BUY_ENABLED then return false end
+    if price > maxPrice then
+        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
+        return false
+    end
+
+    -- Konversi ownerId ke Player object kalau online
+    local numericOwnerId = tonumber(ownerId)
+    local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
+    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
+
+    local success, result = pcall(function()
+        return BoothController:PurchaseListing(ownerArg, listingId)
+    end)
+
+    if success then
+        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+        return true
+    else
+        warn("[AUTO-BUY] ❌ Gagal beli", itemName, ":", tostring(result))
+        return false
+    end
+end
+
+--==================================================
 -- WEBHOOK
 --==================================================
 
@@ -3209,6 +3265,17 @@ print("======================================")
 
                     detectedCount += 1
 
+                    --==================================================
+                    -- AUTO-BUY CHECK
+                    --==================================================
+
+                    if AUTO_BUY_ENABLED then
+                        local maxPrice = AUTO_BUY_LIST[result.itemName]
+                        if maxPrice then
+                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+                        end
+                    end
+
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
                         or {}
@@ -3424,6 +3491,5 @@ end
 --==================================================
 -- RUN
 --==================================================
-
 
 scan()
