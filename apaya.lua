@@ -7,7 +7,7 @@
 --// 5. Setelah webhook selesai, scanner baru server hop
 --// 6. Server hop memakai Roblox Public Server API
 --// 7. Menangani TeleportInitFailed
-
+--// + AUTO-BUY (by request)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -66,6 +66,66 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
+
+--==================================================
+-- AUTO-BUY CONFIG
+--==================================================
+
+local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
+
+local AUTO_BUY_LIST = {
+    -- Nama item (persis seperti di game) : harga maksimal yang mau lo bayar
+    ["Eternal Piercer"] = 28000,
+    ["Love For You"] = 12500,
+    ["Winter Wolf"] = 18000,
+    ["Kitty Katana"] = 12500,
+    ["Moonflower Katana"] = 18000,
+    ["Bunny"] = 120000,
+    ["Ranked Season 15 Top 50"] = 31000,
+    ["Icebound Dominus"] = 28000,
+    ["Regret Blades"] = 19000,
+    ["Celestial Whisper"] = 22000,
+    ["Royal Duality"] = 45000,
+    ["Queen Blade"] = 27000,
+    ["Eternum Galepiercer"] = 8000,
+    ["Zombie Slide"] = 100000,
+    ["Prince Blade"] = 2550,
+    ["Void Blade"] = 1700,
+    ["Phantom Chase"] = 62,
+    ["Abyssal Blade"] = 1300,
+    ["Cloud"] = 22000,
+    ["Crystal Greatblade"] = 1700,
+    ["Neo-Neko Katana"] = 490,
+    ["Witch's Curse"] = 3000,
+    ["Wind Thorn"] = 1000,
+    ["Jackolantern"] = 16000,
+    ["Valentine Hearts"] = 8700,
+    ["Rose Gift"] = 9500,
+    ["Chroma Blade"] = 13900,
+    ["King Blade"] = 12000,
+    ["Puppy"] = 16000,
+    ["Flaming Sword"] = 3100,
+    ["Pillow"] = 2400,
+    ["Holy Blade"] = 2000,
+    ["Higanbana Katana"] = 3900,
+    ["Evil Deal"] = 3000,
+    ["Kitty Rocket"] = 9000,
+    ["Cat Paw"] = 11000,
+    ["Brutality Affection Bat"] = 7200,
+    ["Borealis"] = 27000,
+    ["Reindeer"] = 32000,
+    ["Siam Ember Axe"] = 98000,
+    ["Slime"] = 7500,
+    ["Aligned Constellation"] = 4100,
+    ["Dancinha"] = 3000,
+    ["Riftflare Katana"] = 3000,
+    ["Fox Katana"] = 5700,
+    ["Milk & Cookies"] = 3000,
+    ["Kraken"] = 6900,
+    ["Sakura's Requiem"] = 3850,
+    ["Hitman"] = 5300,
+    ["Angel Greatsword"] = 3000,
+}
 
 --==================================================
 -- WEBHOOKS
@@ -1956,6 +2016,35 @@ local function getTierColor(tierName)
 end
 
 --==================================================
+-- AUTO-BUY
+--==================================================
+
+local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
+    if not AUTO_BUY_ENABLED then return false end
+    if price > maxPrice then
+        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
+        return false
+    end
+
+    -- Konversi ownerId ke Player object kalau online
+    local numericOwnerId = tonumber(ownerId)
+    local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
+    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
+
+    local success, result = pcall(function()
+        return BoothController:PurchaseListing(ownerArg, listingId)
+    end)
+
+    if success then
+        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+        return true
+    else
+        warn("[AUTO-BUY] ❌ Gagal beli", itemName, ":", tostring(result))
+        return false
+    end
+end
+
+--==================================================
 -- WEBHOOK
 --==================================================
 
@@ -3209,6 +3298,17 @@ print("======================================")
 
                     detectedCount += 1
 
+                    --==================================================
+                    -- AUTO-BUY CHECK
+                    --==================================================
+
+                    if AUTO_BUY_ENABLED then
+                        local maxPrice = AUTO_BUY_LIST[result.itemName]
+                        if maxPrice then
+                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+                        end
+                    end
+
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
                         or {}
@@ -3424,6 +3524,5 @@ end
 --==================================================
 -- RUN
 --==================================================
-
 
 scan()
