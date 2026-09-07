@@ -39,8 +39,7 @@ local SAFE_SCAN_COOLDOWN_MIN = 20
 local SAFE_SCAN_COOLDOWN_MAX = 35
 local SAFE_HOP_COOLDOWN_MIN = 30
 local SAFE_HOP_COOLDOWN_MAX = 50
--- 0 = kirim semua deteksi pada scan ini.
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 0
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 20
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
 local WEBHOOK_DELAY_SECONDS = 1
@@ -49,8 +48,8 @@ local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 15
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 10
+local SERVER_HOP_DELAY_SECONDS = 0
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -2402,15 +2401,10 @@ local function sendWebhook(webhookType, ownerId, listing)
         Body = HttpService:JSONEncode(payload),
     }, 1)
 
-    local statusCode = response
-        and tonumber(response.StatusCode)
-
-    if not response
-        or (statusCode and (statusCode < 200 or statusCode >= 300)) then
+    if not response then
         warn(
             "[WEBHOOK ERROR]",
-            tostring(webhookType),
-            statusCode and ("HTTP " .. tostring(statusCode)) or "no response"
+            tostring(webhookType)
         )
 
         return false
@@ -3414,6 +3408,12 @@ print("======================================")
         "======================================"
     )
 
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
+
     local webhookCount = 0
 
     for ownerId, listings
@@ -3422,9 +3422,7 @@ print("======================================")
         for _, listing
             in ipairs(listings) do
 
-            if SAFE_MODE
-                and SAFE_MAX_WEBHOOKS_PER_SCAN > 0
-                and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+            if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                 break
             end
 
@@ -3434,9 +3432,7 @@ print("======================================")
 
             if listing.nuke then
 
-                if SAFE_MODE
-                    and SAFE_MAX_WEBHOOKS_PER_SCAN > 0
-                    and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
 
@@ -3460,9 +3456,7 @@ print("======================================")
 
             if listing.boosted then
 
-                if SAFE_MODE
-                    and SAFE_MAX_WEBHOOKS_PER_SCAN > 0
-                    and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
 
@@ -3507,9 +3501,7 @@ print("======================================")
                         listing.tierName
                 end
 
-                if SAFE_MODE
-                    and SAFE_MAX_WEBHOOKS_PER_SCAN > 0
-                    and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
                 end
 
