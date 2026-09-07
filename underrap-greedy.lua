@@ -66,8 +66,6 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
-local teleportStarted = false
-local teleportAttemptId = 0
 
 --==================================================
 -- AUTO-BUY CONFIG
@@ -77,56 +75,23 @@ local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
 
 local AUTO_BUY_LIST = {
     -- Nama item (persis seperti di game) : harga maksimal yang mau lo bayar
-    ["Eternal Piercer"] = 28000,
-    ["Love For You"] = 12500,
+    ["Eternal Piercer"] = 27000,
+    ["Love For You"] = 12000,
     ["Winter Wolf"] = 18000,
-    ["Kitty Katana"] = 12500,
-    ["Moonflower Katana"] = 18000,
+    ["Kitty Katana"] = 12600,
+    ["Moonflower Katana"] = 17000,
     ["Bunny"] = 120000,
     ["Ranked Season 15 Top 50"] = 31000,
     ["Icebound Dominus"] = 28000,
     ["Regret Blades"] = 19000,
-    ["Celestial Whisper"] = 22000,
-    ["Royal Duality"] = 45000,
+    ["Celestial Whisper"] = 21000,
+    ["Royal Duality"] = 40000,
     ["Queen Blade"] = 27000,
     ["Eternum Galepiercer"] = 8000,
     ["Zombie Slide"] = 100000,
-    ["Prince Blade"] = 2550,
-    ["Void Blade"] = 1700,
+    ["Prince Blade"] = 2400,
+    ["Void Blade"] = 1600,
     ["Phantom Chase"] = 62,
-    ["Abyssal Blade"] = 1300,
-    ["Cloud"] = 22000,
-    ["Crystal Greatblade"] = 1700,
-    ["Neo-Neko Katana"] = 490,
-    ["Witch's Curse"] = 3000,
-    ["Wind Thorn"] = 1000,
-    ["Jackolantern"] = 16000,
-    ["Valentine Hearts"] = 8700,
-    ["Rose Gift"] = 9500,
-    ["Chroma Blade"] = 13900,
-    ["King Blade"] = 12000,
-    ["Puppy"] = 16000,
-    ["Flaming Sword"] = 3100,
-    ["Pillow"] = 2400,
-    ["Holy Blade"] = 2000,
-    ["Higanbana Katana"] = 3900,
-    ["Evil Deal"] = 3000,
-    ["Kitty Rocket"] = 9000,
-    ["Cat Paw"] = 11000,
-    ["Brutality Affection Bat"] = 7200,
-    ["Borealis"] = 27000,
-    ["Reindeer"] = 32000,
-    ["Siam Ember Axe"] = 98000,
-    ["Slime"] = 7500,
-    ["Aligned Constellation"] = 4100,
-    ["Dancinha"] = 3000,
-    ["Riftflare Katana"] = 3000,
-    ["Fox Katana"] = 5700,
-    ["Milk & Cookies"] = 3000,
-    ["Kraken"] = 6900,
-    ["Sakura's Requiem"] = 3850,
-    ["Hitman"] = 5300,
-    ["Angel Greatsword"] = 3000,
 }
 
 --==================================================
@@ -3022,9 +2987,6 @@ serverHop = function(serverId)
     end
 
     hopInProgress = true
-    teleportStarted = false
-    teleportAttemptId += 1
-    local currentTeleportAttempt = teleportAttemptId
 
     print(
         "======================================"
@@ -3132,29 +3094,8 @@ serverHop = function(serverId)
     else
 
         print(
-            "[Server Hop] Teleport request dikirim; menunggu Roblox memulai teleport..."
+            "[Server Hop] Teleport request berhasil."
         )
-
-        task.delay(15, function()
-            if currentTeleportAttempt ~= teleportAttemptId
-                or not hopInProgress
-                or teleportStarted then
-                return
-            end
-
-            warn(
-                "[SERVER HOP] Teleport tidak dimulai setelah request; target diblokir dan mencoba server lain."
-            )
-
-            if lastTeleportTargetId then
-                blockedServerIds[lastTeleportTargetId] = true
-                lastTeleportTargetId = nil
-            end
-
-            hopInProgress = false
-            lastServerHopAt = 0
-            serverHop()
-        end)
 
     end
 end
@@ -3368,6 +3309,12 @@ print("======================================")
     print(
         "======================================"
     )
+
+    if ENABLE_SERVER_HOP then
+        task.spawn(function()
+            serverHop()
+        end)
+    end
 
     local webhookCount = 0
 
