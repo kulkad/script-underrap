@@ -35,21 +35,19 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_MIN = 20
-local SAFE_SCAN_COOLDOWN_MAX = 35
-local SAFE_HOP_COOLDOWN_MIN = 30
-local SAFE_HOP_COOLDOWN_MAX = 50
+local SAFE_SCAN_COOLDOWN_SECONDS = 45
+local SAFE_HOP_COOLDOWN_SECONDS = 60
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 1
+local WEBHOOK_DELAY_SECONDS = 4
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 0
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
+local SERVER_HOP_DELAY_SECONDS = 10
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 10
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -68,6 +66,10 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
+
+local function randomDelay(minimum, maximum)
+    return minimum + math.random() * (maximum - minimum)
+end
 
 --==================================================
 -- AUTO-BUY CONFIG
@@ -190,7 +192,7 @@ local AUTO_BUY_LIST = {
     ["Fox Katana"] = 5500,   -- lebih murah dari 5700
     ["Milk & Cookies"] = 3000,
     ["Kraken"] = 6900,       -- lebih murah dari 7000
-    ["Sakura's Requiem"] = 3900,  -- lebih murah dari 3900
+    ["Sakura's Requiem"] = 3850,  -- lebih murah dari 3900
     ["Hitman"] = 5300,
     ["Angel Greatsword"] = 3000,
     ["Bunny"] = 120000,
@@ -201,6 +203,13 @@ local AUTO_BUY_LIST = {
     ["Phantom Chase"] = 62,
 }
 
+local function requiresSwordType(itemName)
+    local normalizedName = string.lower(tostring(itemName))
+
+    return string.find(normalizedName, "sword", 1, true) ~= nil
+        or string.find(normalizedName, "katana", 1, true) ~= nil
+end
+
 --==================================================
 -- WEBHOOKS
 --==================================================
@@ -210,6 +219,7 @@ local WEBHOOKS = {
     LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
     MID = "https://discord.com/api/webhooks/1543706710244589698/_THA47t4vJdnPYY23W5yFto012XfGIi7ULE23UAvr64ZIs7r6AG2cqu-FRLw3u36oo8x",
     HIGH = "https://discord.com/api/webhooks/1543707373900660756/rNWk0OGFmxHNUStM4RN43nSMegf5xeNNFvFkGMwrub2SP7C05WzzcmwiVL_TkDQ0AGo2",
+
     ["100K+"] = "https://discord.com/api/webhooks/1543707100637564999/3yeKaYamEkuKSrdSjTRVhOf_SSRZ_Dag3rCQBgjJLYzwILCnLZLo8_RiOqxNoBo9z8bA",
     BOOSTED = "https://discord.com/api/webhooks/1543707587617226782/86m7vT9fktckDHFumeoxRmIkLLdAG3cUmmzZ4Gtp4dvR55zJKD9HXX6kq91lIgSElYgZ",
     NUKE = "https://discord.com/api/webhooks/1543707672304554055/hSQK_b2OS0z9sXeX0gsVnewkcHrXgrr7zZ51oPlomgGsUOnAJQC_iQVvzMN1_uSdUfjS",
@@ -219,6 +229,7 @@ local WEBHOOKS = {
 --==================================================
 -- MANUAL BOOSTED LIST
 --==================================================
+
 
 local BOOSTED_ITEMS = {
     ["Coconut Failure"] = true,
@@ -727,13 +738,11 @@ local function getResponseBody(response)
 end
 
 local function canDoServerHop()
-    local cooldown = randomDelay(SAFE_HOP_COOLDOWN_MIN, SAFE_HOP_COOLDOWN_MAX)
-    return os.clock() - lastServerHopAt >= cooldown
+    return os.clock() - lastServerHopAt >= SERVER_HOP_COOLDOWN_SECONDS
 end
 
 local function canDoScan()
-    local cooldown = randomDelay(SAFE_SCAN_COOLDOWN_MIN, SAFE_SCAN_COOLDOWN_MAX)
-    return os.clock() - lastScanAt >= cooldown
+    return os.clock() - lastScanAt >= SAFE_SCAN_COOLDOWN_SECONDS
 end
 
 --==================================================
@@ -2095,9 +2104,19 @@ end
 -- AUTO-BUY
 --==================================================
 
-local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
-    task.wait(randomDelay(0.5, 1.5))
+local function attemptPurchase(ownerId, listingId, itemName, itemType, price, maxPrice)
     if not AUTO_BUY_ENABLED then return false end
+
+    if requiresSwordType(itemName) and itemType ~= "Sword" then
+        print(
+            "[AUTO-BUY] Nama mengharuskan Sword, skip:",
+            itemName,
+            "Type:",
+            tostring(itemType)
+        )
+        return false
+    end
+
     if price > maxPrice then
         print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
         return false
@@ -2125,21 +2144,41 @@ end
 -- WEBHOOK
 --==================================================
 
-local function sendWebhook(webhookType, ownerId, listing)
-    local webhookUrl = WEBHOOKS[webhookType]
-    if not webhookUrl or webhookUrl == "" or string.find(webhookUrl, "PASTE_") then
-        warn("[WEBHOOK] URL belum diisi:", webhookType)
+local function sendWebhook(
+    webhookType,
+    ownerId,
+    listing
+)
+
+    local webhookUrl
+
+    if type(WEBHOOKS) == "table" then
+        webhookUrl = WEBHOOKS[webhookType]
+    end
+
+    if not webhookUrl
+        or webhookUrl == ""
+        or string.find(
+            webhookUrl,
+            "PASTE_"
+        ) then
+
+        warn(
+            "[WEBHOOK] URL belum diisi:",
+            webhookType
+        )
+
         return false
     end
+
     if not REQUEST then
-        warn("[WEBHOOK] Request function tidak tersedia.")
+
+        warn(
+            "[WEBHOOK] Request function tidak tersedia."
+        )
+
         return false
     end
-
-    -- ✅ Tambahkan delay acak di sini
-    task.wait(randomDelay(1.5, 3.5))
-
-    -- ... sisanya tetap sama
 
     local ownerInfo =
         getOwnerInfo(ownerId)
@@ -3137,9 +3176,6 @@ serverHop = function(serverId)
         tostring(serverId)
     )
 
-    -- Delay acak sebelum teleport (2 - 5 detik)
-task.wait(randomDelay(2, 5))
-
     local success, result =
         pcall(function()
 
@@ -3365,7 +3401,14 @@ print("======================================")
                     if AUTO_BUY_ENABLED then
                         local maxPrice = AUTO_BUY_LIST[result.itemName]
                         if maxPrice then
-                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+                            attemptPurchase(
+                                ownerId,
+                                listingId,
+                                result.itemName,
+                                result.itemType,
+                                result.price,
+                                maxPrice
+                            )
                         end
                     end
 
@@ -3403,12 +3446,6 @@ print("======================================")
         "======================================"
     )
 
-    if ENABLE_SERVER_HOP then
-        task.spawn(function()
-            serverHop()
-        end)
-    end
-
     local webhookCount = 0
 
     for ownerId, listings
@@ -3442,7 +3479,9 @@ print("======================================")
                     webhookCount += 1
                 end
 
-                task.wait(randomDelay(1.5, 3.5))
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
             end
 
             --==========================================
