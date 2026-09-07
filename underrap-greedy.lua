@@ -91,7 +91,7 @@ local AUTO_BUY_LIST = {
     ["Zombie Slide"] = 100000,
     ["Prince Blade"] = 2400,
     ["Void Blade"] = 1600,
-    ["Sparkblade"] = 2,
+    ["Phantom Chase"] = 62,
 }
 
 --==================================================
