@@ -97,6 +97,7 @@ local BOOSTED_ITEMS = {
     ["Dawnpiercer"] = true,
     ["Ocean Surfer"] = true,
     ["Knighthood"] = true,
+    ["Hug"] = true,
     ["Gravebone Scythe"] = true,
     ["Loving Backblade"] = true,
     ["Blackhole Gauntlets"] = true,
