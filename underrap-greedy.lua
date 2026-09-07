@@ -2994,15 +2994,6 @@ TeleportService.TeleportInitFailed:Connect(
     end
 )
 
-TeleportService.TeleportStateChanged:Connect(function(teleportState)
-    if teleportState == Enum.TeleportState.Started
-        or teleportState == Enum.TeleportState.InProgress
-        or teleportState == Enum.TeleportState.WaitingForServer then
-        teleportStarted = true
-        print("[SERVER HOP] Teleport state:", tostring(teleportState))
-    end
-end)
-
 --==================================================
 -- SERVER HOP
 --==================================================
