@@ -35,19 +35,19 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 45   
-local SAFE_HOP_COOLDOWN_SECONDS = 70   
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 30   
+local SAFE_SCAN_COOLDOWN_SECONDS = 20
+local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
 local SAFE_SERVER_HOP_RETRY_LIMIT = 2
 
-local WEBHOOK_DELAY_SECONDS = 1.5       -- turun dari 2
-local BOOTH_LOAD_DELAY_SECONDS = 2      -- turun dari 5
-local BOOTH_LOAD_TIMEOUT_SECONDS = 10   -- turun dari 20
+local WEBHOOK_DELAY_SECONDS = 2
+local BOOTH_LOAD_DELAY_SECONDS = 5
+local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 2      -- turun dari 5
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 2  -- turun dari 3
+local SERVER_HOP_DELAY_SECONDS = 5
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -66,28 +66,6 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
-
-
---==================================================
--- AUTO-BUY OTOMATIS (dua level)
---==================================================
-
-local AUTO_BUY_AUTO_ENABLED = true   -- aktif/nonaktif
-
--- Level 1a: RAP 120–500 dengan diskon besar (min 80%)
-local AUTO_BUY_LEVEL1A_RAP_MAX = 500
-local AUTO_BUY_LEVEL1A_MIN_DISCOUNT = 80   -- diskon minimum 80%
-
--- Level 1b: RAP 501–1000 dengan diskon 15%
-local AUTO_BUY_LEVEL1B_RAP_MIN = 501
-local AUTO_BUY_LEVEL1B_RAP_MAX = 1000
-local AUTO_BUY_LEVEL1B_MIN_DISCOUNT = 15
-
--- Level 2: RAP menengah (1k–10k)
-local AUTO_BUY_LEVEL2_RAP_MIN = 1001
-local AUTO_BUY_LEVEL2_RAP_MAX = 10000
-local AUTO_BUY_LEVEL2_MIN_DISCOUNT = 7    -- persen
-local AUTO_BUY_LEVEL2_MIN_SALES = 30
 
 --==================================================
 -- AUTO-BUY CONFIG
@@ -1591,7 +1569,7 @@ local function getLoadedBoothData()
             )
         end
 
-        task.wait(0.5)
+        task.wait(1)
 
     until os.clock() >= deadline
 
@@ -2118,28 +2096,22 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
         return false
     end
 
-    -- Cari Player online
+    -- Konversi ownerId ke Player object kalau online
     local numericOwnerId = tonumber(ownerId)
     local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId   -- kalau offline kirim userId
+    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
 
-    -- Retry 2x
-    for attempt = 1, 3 do
-        local success, result = pcall(function()
-            return BoothController:PurchaseListing(ownerArg, listingId)
-        end)
+    local success, result = pcall(function()
+        return BoothController:PurchaseListing(ownerArg, listingId)
+    end)
 
-        if success then
-            print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-            return true
-        else
-            warn("[AUTO-BUY] ❌ Gagal (percobaan "..attempt.."):", tostring(result))
-            if attempt < 3 then
-                task.wait(0.5 * attempt)
-            end
-        end
+    if success then
+        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+        return true
+    else
+        warn("[AUTO-BUY] ❌ Gagal beli", itemName, ":", tostring(result))
+        return false
     end
-    return false
 end
 
 --==================================================
@@ -3142,9 +3114,6 @@ serverHop = function(serverId)
     )
 
     if not serverId then
-        local hopJitter = math.random(1, 3)   -- sebelumnya 2-6
-            print("[Server Hop] Jeda acak "..hopJitter.." detik sebelum cari server...")
-            task.wait(hopJitter)
         task.wait(
             SERVER_HOP_DELAY_SECONDS
         )
@@ -3253,8 +3222,6 @@ local function scan()
     scanInProgress = true
     lastScanAt = os.clock()
 
-    
-
     print(
         "======================================"
     )
@@ -3266,10 +3233,6 @@ local function scan()
     print(
         "======================================"
     )
-
-    local jitter = math.random(1, 2)   -- sebelumnya 3-8
-    print("[Scanner] Menunggu "..jitter.." detik (jitter) sebelum scan...")
-    task.wait(jitter)
 
     --==================================================
     -- GET BOOTH DATA
@@ -3369,13 +3332,17 @@ print("======================================")
     local seenListings = {}
     local groupedListings = {}
 
-        --==================================================
+    --==================================================
     -- SCAN ALL BOOTHS
     --==================================================
 
     for ownerId, listings in pairs(data) do
+
         if typeof(listings) == "table" then
-            for listingId, listing in pairs(listings) do
+
+            for listingId, listing
+                in pairs(listings) do
+
                 count += 1
 
                 local itemKey = listing and listing.ItemKey or listing and listing.itemKey or listing and listing.Key or listing and listing.key
@@ -3389,59 +3356,37 @@ print("======================================")
 
                 seenListings[listingSignature] = true
 
-                local result = inspectListing(ownerId, listingId, listing, boothsByOwnerId)
+                local result =
+                    inspectListing(
+                        ownerId,
+                        listingId,
+                        listing,
+                        boothsByOwnerId
+                    )
 
                 if result then
+
                     detectedCount += 1
 
                     --==================================================
-                    -- AUTO-BUY CHECK (prioritas: daftar spesifik > otomatis)
+                    -- AUTO-BUY CHECK
                     --==================================================
-  if AUTO_BUY_ENABLED then
-    local shouldBuy = false
-    local maxPrice = nil
 
-    if not result.boosted then
-        if AUTO_BUY_LIST[result.itemName] then
-            shouldBuy = true
-            maxPrice = AUTO_BUY_LIST[result.itemName]
-        elseif AUTO_BUY_AUTO_ENABLED then
-            local sales = result.salesHistory
-            local rap = result.rap
-            local discount = result.discount
+                    if AUTO_BUY_ENABLED then
+                        local maxPrice = AUTO_BUY_LIST[result.itemName]
+                        if maxPrice then
+                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+                        end
+                    end
 
-            -- Level 1: RAP 120 – 1000, dibagi dua sub-level
-            if rap >= AUTO_BUY_LEVEL1_MIN_RAP and rap <= AUTO_BUY_LEVEL1_RAP_MAX then
-                local minDiscount
-                if rap <= AUTO_BUY_LEVEL1A_RAP_MAX then
-                    minDiscount = AUTO_BUY_LEVEL1A_MIN_DISCOUNT   -- 80% untuk RAP ≤ 500
-                else
-                    minDiscount = AUTO_BUY_LEVEL1B_MIN_DISCOUNT   -- 15% untuk RAP 501–1000
-                end
-                if discount >= minDiscount
-                    and sales and sales.totalSales >= AUTO_BUY_LEVEL1_MIN_SALES then
-                    shouldBuy = true
-                    maxPrice = result.price
-                end
-            -- Level 2: RAP 1001–10000
-            elseif rap <= AUTO_BUY_LEVEL2_RAP_MAX then
-                if discount >= AUTO_BUY_LEVEL2_MIN_DISCOUNT
-                    and sales and sales.totalSales >= AUTO_BUY_LEVEL2_MIN_SALES then
-                    shouldBuy = true
-                    maxPrice = result.price
-                end
-            end
-        end
-    end
+                    groupedListings[ownerId] =
+                        groupedListings[ownerId]
+                        or {}
 
-    if shouldBuy then
-        attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
-    end
-end
-
-                    -- simpan ke groupedListings untuk webhook
-                    groupedListings[ownerId] = groupedListings[ownerId] or {}
-                    table.insert(groupedListings[ownerId], result)
+                    table.insert(
+                        groupedListings[ownerId],
+                        result
+                    )
                 end
             end
         end
@@ -3476,51 +3421,114 @@ end
 
     local webhookCount = 0
 
-    -- Pertama kirim semua NUKE dan DEEP_UNDERRAP dan normal underrap (non-boosted)
--- Kemudian kirim BOOSTED setelah semua yang lain.
+    for ownerId, listings
+        in pairs(groupedListings) do
 
--- Fungsi bantu kirim dengan batas webhookCount
-local function sendWithLimit(webhookType, ownerId, listing)
-    if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-        return false
-    end
-    local sent = sendWebhook(webhookType, ownerId, listing)
-    if sent then
-        webhookCount += 1
-    end
-    task.wait(WEBHOOK_DELAY_SECONDS)
-    return sent
-end
+        for _, listing
+            in ipairs(listings) do
 
--- PHASE 1: Kirim semua non-boosted (NUKE, deep, normal)
-for ownerId, listings in pairs(groupedListings) do
-    for _, listing in ipairs(listings) do
-        if listing.nuke then
-            sendWithLimit("NUKE", ownerId, listing)
-        end
-    end
-end
+            if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                break
+            end
 
-for ownerId, listings in pairs(groupedListings) do
-    for _, listing in ipairs(listings) do
-        if not listing.boosted and not listing.nuke then
-            -- normal underrap
-            if listing.price < listing.rap and listing.discount >= getUnderrapThreshold(listing.tierName) then
-                local webhookType = listing.deepUnderrap and "DEEP_UNDERRAP" or listing.tierName
-                sendWithLimit(webhookType, ownerId, listing)
+            --==========================================
+            -- NUKE
+            --==========================================
+
+            if listing.nuke then
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        "NUKE",
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
+            end
+
+            --==========================================
+            -- BOOSTED
+            --==========================================
+
+            if listing.boosted then
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        "BOOSTED",
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
+            end
+
+            --==========================================
+            -- NORMAL UNDERRAP
+            --==========================================
+
+            if listing.price < listing.rap
+                and listing.discount >=
+                    getUnderrapThreshold(
+                        listing.tierName
+                    )
+                and not listing.boosted
+                and not listing.nuke then
+
+                local webhookType
+
+                if listing.deepUnderrap then
+
+                    webhookType =
+                        "DEEP_UNDERRAP"
+
+                else
+
+                    webhookType =
+                        listing.tierName
+                end
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        webhookType,
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
             end
         end
     end
-end
-
--- PHASE 2: Kirim BOOSTED (setelah semua selesai)
-for ownerId, listings in pairs(groupedListings) do
-    for _, listing in ipairs(listings) do
-        if listing.boosted then
-            sendWithLimit("BOOSTED", ownerId, listing)
-        end
-    end
-end
 
     --==================================================
     -- SCAN SUMMARY
@@ -3549,22 +3557,34 @@ end
         "======================================"
     )
 
-        --==================================================
+    --==================================================
     -- SERVER HOP ONLY AFTER WEBHOOK
     --==================================================
 
     if ENABLE_SERVER_HOP then
-        print("[Scanner] Webhook phase selesai.")
-        print("[Scanner] Menunggu 5 detik sebelum server hop...")
-        task.wait(5)
+
+        print(
+            "[Scanner] Webhook phase selesai."
+        )
+
         if SAFE_MODE then
-            print("[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam.")
+            print(
+                "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
+            )
         end
-        print("[Scanner] Starting server hop...")
+
+        print(
+            "[Scanner] Starting server hop..."
+        )
+
         preparedServerId = nil
         serverHop()
+
     else
-        print("[Server Hop] Disabled.")
+
+        print(
+            "[Server Hop] Disabled."
+        )
     end
 
     hopAttemptCount = 0
