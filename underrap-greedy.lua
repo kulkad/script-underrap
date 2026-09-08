@@ -74,11 +74,14 @@ local preparedServerId = nil
 
 local AUTO_BUY_AUTO_ENABLED = true   -- aktif/nonaktif
 
--- Level 1: RAP rendah (≤ 1k)
-local AUTO_BUY_LEVEL1_RAP_MAX = 1000
-local AUTO_BUY_LEVEL1_MIN_RAP = 120      -- tambahkan ini
-local AUTO_BUY_LEVEL1_MIN_DISCOUNT = 15
-local AUTO_BUY_LEVEL1_MIN_SALES = 50
+-- Level 1a: RAP 120–500 dengan diskon besar (min 80%)
+local AUTO_BUY_LEVEL1A_RAP_MAX = 500
+local AUTO_BUY_LEVEL1A_MIN_DISCOUNT = 80   -- diskon minimum 80%
+
+-- Level 1b: RAP 501–1000 dengan diskon 15%
+local AUTO_BUY_LEVEL1B_RAP_MIN = 501
+local AUTO_BUY_LEVEL1B_RAP_MAX = 1000
+local AUTO_BUY_LEVEL1B_MIN_DISCOUNT = 15
 
 -- Level 2: RAP menengah (1k–10k)
 local AUTO_BUY_LEVEL2_RAP_MIN = 1001
@@ -3398,21 +3401,24 @@ print("======================================")
     local shouldBuy = false
     local maxPrice = nil
 
-    -- JANGAN beli jika item adalah boosted
     if not result.boosted then
-        -- PRIORITAS 1: Daftar spesifik (AUTO_BUY_LIST)
         if AUTO_BUY_LIST[result.itemName] then
             shouldBuy = true
             maxPrice = AUTO_BUY_LIST[result.itemName]
-        -- PRIORITAS 2: Auto-buy otomatis (jika diaktifkan)
         elseif AUTO_BUY_AUTO_ENABLED then
             local sales = result.salesHistory
             local rap = result.rap
             local discount = result.discount
 
-            -- Level 1: RAP 120 – 1000
-            if rap <= AUTO_BUY_LEVEL1_RAP_MAX and rap >= AUTO_BUY_LEVEL1_MIN_RAP then
-                if discount >= AUTO_BUY_LEVEL1_MIN_DISCOUNT
+            -- Level 1: RAP 120 – 1000, dibagi dua sub-level
+            if rap >= AUTO_BUY_LEVEL1_MIN_RAP and rap <= AUTO_BUY_LEVEL1_RAP_MAX then
+                local minDiscount
+                if rap <= AUTO_BUY_LEVEL1A_RAP_MAX then
+                    minDiscount = AUTO_BUY_LEVEL1A_MIN_DISCOUNT   -- 80% untuk RAP ≤ 500
+                else
+                    minDiscount = AUTO_BUY_LEVEL1B_MIN_DISCOUNT   -- 15% untuk RAP 501–1000
+                end
+                if discount >= minDiscount
                     and sales and sales.totalSales >= AUTO_BUY_LEVEL1_MIN_SALES then
                     shouldBuy = true
                     maxPrice = result.price
