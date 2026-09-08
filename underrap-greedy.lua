@@ -35,8 +35,8 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 30    
-local SAFE_HOP_COOLDOWN_SECONDS = 50     
+local SAFE_SCAN_COOLDOWN_SECONDS = 45   
+local SAFE_HOP_COOLDOWN_SECONDS = 70   
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 30   
 local SAFE_SERVER_HOP_RETRY_LIMIT = 2
 
@@ -66,6 +66,23 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
+
+--==================================================
+-- AUTO-BUY OTOMATIS (dua level)
+--==================================================
+
+local AUTO_BUY_AUTO_ENABLED = true   -- aktif/nonaktif
+
+-- Level 1: RAP rendah (≤ 1k)
+local AUTO_BUY_LEVEL1_RAP_MAX = 1000
+local AUTO_BUY_LEVEL1_MIN_DISCOUNT = 15   -- persen
+local AUTO_BUY_LEVEL1_MIN_SALES = 50
+
+-- Level 2: RAP menengah (1k–10k)
+local AUTO_BUY_LEVEL2_RAP_MIN = 1001
+local AUTO_BUY_LEVEL2_RAP_MAX = 10000
+local AUTO_BUY_LEVEL2_MIN_DISCOUNT = 7    -- persen
+local AUTO_BUY_LEVEL2_MIN_SALES = 30
 
 --==================================================
 -- AUTO-BUY CONFIG
@@ -3120,6 +3137,9 @@ serverHop = function(serverId)
     )
 
     if not serverId then
+        local hopJitter = math.random(2, 6)
+print("[Server Hop] Jeda acak "..hopJitter.." detik sebelum cari server...")
+task.wait(hopJitter)
         task.wait(
             SERVER_HOP_DELAY_SECONDS
         )
@@ -3240,6 +3260,11 @@ local function scan()
         "======================================"
     )
 
+    -- Jeda acak 3-8 detik agar tidak terdeteksi pola
+local jitter = math.random(3, 8)
+print("[Scanner] Menunggu "..jitter.." detik (jitter) sebelum scan...")
+task.wait(jitter)
+
     --==================================================
     -- GET BOOTH DATA
     --==================================================
@@ -3338,17 +3363,13 @@ print("======================================")
     local seenListings = {}
     local groupedListings = {}
 
-    --==================================================
+        --==================================================
     -- SCAN ALL BOOTHS
     --==================================================
 
     for ownerId, listings in pairs(data) do
-
         if typeof(listings) == "table" then
-
-            for listingId, listing
-                in pairs(listings) do
-
+            for listingId, listing in pairs(listings) do
                 count += 1
 
                 local itemKey = listing and listing.ItemKey or listing and listing.itemKey or listing and listing.Key or listing and listing.key
@@ -3362,37 +3383,53 @@ print("======================================")
 
                 seenListings[listingSignature] = true
 
-                local result =
-                    inspectListing(
-                        ownerId,
-                        listingId,
-                        listing,
-                        boothsByOwnerId
-                    )
+                local result = inspectListing(ownerId, listingId, listing, boothsByOwnerId)
 
                 if result then
-
                     detectedCount += 1
 
                     --==================================================
-                    -- AUTO-BUY CHECK
+                    -- AUTO-BUY CHECK (prioritas: daftar spesifik > otomatis)
                     --==================================================
-
                     if AUTO_BUY_ENABLED then
-                        local maxPrice = AUTO_BUY_LIST[result.itemName]
-                        if maxPrice then
+                        local shouldBuy = false
+                        local maxPrice = nil
+
+                        -- PRIORITAS 1: Daftar spesifik (AUTO_BUY_LIST)
+                        if AUTO_BUY_LIST[result.itemName] then
+                            shouldBuy = true
+                            maxPrice = AUTO_BUY_LIST[result.itemName]
+                        -- PRIORITAS 2: Auto-buy otomatis (jika diaktifkan)
+                        elseif AUTO_BUY_AUTO_ENABLED then
+                            local sales = result.salesHistory
+                            local rap = result.rap
+                            local discount = result.discount
+
+                            -- Level 1: RAP ≤ 1000
+                            if rap <= AUTO_BUY_LEVEL1_RAP_MAX then
+                                if discount >= AUTO_BUY_LEVEL1_MIN_DISCOUNT
+                                    and sales and sales.totalSales >= AUTO_BUY_LEVEL1_MIN_SALES then
+                                    shouldBuy = true
+                                    maxPrice = result.price
+                                end
+                            -- Level 2: RAP 1001–10000
+                            elseif rap <= AUTO_BUY_LEVEL2_RAP_MAX then
+                                if discount >= AUTO_BUY_LEVEL2_MIN_DISCOUNT
+                                    and sales and sales.totalSales >= AUTO_BUY_LEVEL2_MIN_SALES then
+                                    shouldBuy = true
+                                    maxPrice = result.price
+                                end
+                            end
+                        end
+
+                        if shouldBuy then
                             attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
                         end
                     end
 
-                    groupedListings[ownerId] =
-                        groupedListings[ownerId]
-                        or {}
-
-                    table.insert(
-                        groupedListings[ownerId],
-                        result
-                    )
+                    -- simpan ke groupedListings untuk webhook
+                    groupedListings[ownerId] = groupedListings[ownerId] or {}
+                    table.insert(groupedListings[ownerId], result)
                 end
             end
         end
