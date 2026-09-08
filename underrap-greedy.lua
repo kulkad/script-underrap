@@ -76,7 +76,8 @@ local AUTO_BUY_AUTO_ENABLED = true   -- aktif/nonaktif
 
 -- Level 1: RAP rendah (≤ 1k)
 local AUTO_BUY_LEVEL1_RAP_MAX = 1000
-local AUTO_BUY_LEVEL1_MIN_DISCOUNT = 15   -- persen
+local AUTO_BUY_LEVEL1_MIN_RAP = 120      -- tambahkan ini
+local AUTO_BUY_LEVEL1_MIN_DISCOUNT = 15
 local AUTO_BUY_LEVEL1_MIN_SALES = 50
 
 -- Level 2: RAP menengah (1k–10k)
@@ -3393,41 +3394,45 @@ print("======================================")
                     --==================================================
                     -- AUTO-BUY CHECK (prioritas: daftar spesifik > otomatis)
                     --==================================================
-                    if AUTO_BUY_ENABLED then
-                        local shouldBuy = false
-                        local maxPrice = nil
+                   if AUTO_BUY_ENABLED then
+    local shouldBuy = false
+    local maxPrice = nil
 
-                        -- PRIORITAS 1: Daftar spesifik (AUTO_BUY_LIST)
-                        if AUTO_BUY_LIST[result.itemName] then
-                            shouldBuy = true
-                            maxPrice = AUTO_BUY_LIST[result.itemName]
-                        -- PRIORITAS 2: Auto-buy otomatis (jika diaktifkan)
-                        elseif AUTO_BUY_AUTO_ENABLED then
-                            local sales = result.salesHistory
-                            local rap = result.rap
-                            local discount = result.discount
+    -- JANGAN beli jika item adalah boosted
+    if not result.boosted then
+        -- PRIORITAS 1: Daftar spesifik (AUTO_BUY_LIST)
+        if AUTO_BUY_LIST[result.itemName] then
+            shouldBuy = true
+            maxPrice = AUTO_BUY_LIST[result.itemName]
+        -- PRIORITAS 2: Auto-buy otomatis (jika diaktifkan)
+        elseif AUTO_BUY_AUTO_ENABLED then
+            local sales = result.salesHistory
+            local rap = result.rap
+            local discount = result.discount
 
-                            -- Level 1: RAP ≤ 1000
-                            if rap <= AUTO_BUY_LEVEL1_RAP_MAX then
-                                if discount >= AUTO_BUY_LEVEL1_MIN_DISCOUNT
-                                    and sales and sales.totalSales >= AUTO_BUY_LEVEL1_MIN_SALES then
-                                    shouldBuy = true
-                                    maxPrice = result.price
-                                end
-                            -- Level 2: RAP 1001–10000
-                            elseif rap <= AUTO_BUY_LEVEL2_RAP_MAX then
-                                if discount >= AUTO_BUY_LEVEL2_MIN_DISCOUNT
-                                    and sales and sales.totalSales >= AUTO_BUY_LEVEL2_MIN_SALES then
-                                    shouldBuy = true
-                                    maxPrice = result.price
-                                end
-                            end
-                        end
+           -- Level 1: RAP 120 – 1000
+if rap <= AUTO_BUY_LEVEL1_RAP_MAX and rap >= AUTO_BUY_LEVEL1_MIN_RAP then
+    if discount >= AUTO_BUY_LEVEL1_MIN_DISCOUNT
+        and sales and sales.totalSales >= AUTO_BUY_LEVEL1_MIN_SALES then
+        shouldBuy = true
+        maxPrice = result.price
+    end
+end
+            -- Level 2: RAP 1001–10000
+            elseif rap <= AUTO_BUY_LEVEL2_RAP_MAX then
+                if discount >= AUTO_BUY_LEVEL2_MIN_DISCOUNT
+                    and sales and sales.totalSales >= AUTO_BUY_LEVEL2_MIN_SALES then
+                    shouldBuy = true
+                    maxPrice = result.price
+                end
+            end
+        end
+    end
 
-                        if shouldBuy then
-                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
-                        end
-                    end
+    if shouldBuy then
+        attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+    end
+end
 
                     -- simpan ke groupedListings untuk webhook
                     groupedListings[ownerId] = groupedListings[ownerId] or {}
