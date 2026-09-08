@@ -2085,10 +2085,6 @@ local function getTierColor(tierName)
         or 65280
 end
 
---==================================================
--- AUTO-BUY
---==================================================
-
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
     if not AUTO_BUY_ENABLED then return false end
     if price > maxPrice then
@@ -2096,24 +2092,31 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
         return false
     end
 
-    -- Konversi ownerId ke Player object kalau online
+    -- Cari Player online
     local numericOwnerId = tonumber(ownerId)
     local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
+    local ownerArg = player or ownerId  -- kirim Player object jika online, userId jika offline
 
-    local success, result = pcall(function()
-        return BoothController:PurchaseListing(ownerArg, listingId)
-    end)
+    print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", ownerArg, "listingId:", listingId)
 
-    if success then
-        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-        return true
-    else
-        warn("[AUTO-BUY] ❌ Gagal beli", itemName, ":", tostring(result))
-        return false
+    -- Retry 2x
+    for attempt = 1, 3 do
+        local success, result = pcall(function()
+            return BoothController:PurchaseListing(ownerArg, listingId)
+        end)
+
+        if success then
+            print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+            return true
+        else
+            warn("[AUTO-BUY] ❌ Gagal (percobaan "..attempt.."):", tostring(result))
+            if attempt < 3 then
+                task.wait(0.5 * attempt)
+            end
+        end
     end
+    return false
 end
-
 --==================================================
 -- WEBHOOK
 --==================================================
@@ -3373,11 +3376,13 @@ print("======================================")
                     --==================================================
 
                     if AUTO_BUY_ENABLED then
-                        local maxPrice = AUTO_BUY_LIST[result.itemName]
-                        if maxPrice then
-                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
-                        end
-                    end
+    local maxPrice = AUTO_BUY_LIST[result.itemName]
+    if maxPrice then
+        -- Ambil listingId yang benar (bisa dari properti listing)
+        local realListingId = listing.Id or listing.listingId or listingId
+        attemptPurchase(ownerId, realListingId, result.itemName, result.price, maxPrice)
+    end
+end
 
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
