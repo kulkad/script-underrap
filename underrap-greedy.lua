@@ -3394,14 +3394,17 @@ print("======================================")
                     --==================================================
                     -- AUTO-BUY CHECK (prioritas: daftar spesifik > otomatis)
                     --==================================================
-   if AUTO_BUY_ENABLED then
+  if AUTO_BUY_ENABLED then
     local shouldBuy = false
     local maxPrice = nil
 
+    -- JANGAN beli jika item adalah boosted
     if not result.boosted then
+        -- PRIORITAS 1: Daftar spesifik (AUTO_BUY_LIST)
         if AUTO_BUY_LIST[result.itemName] then
             shouldBuy = true
             maxPrice = AUTO_BUY_LIST[result.itemName]
+        -- PRIORITAS 2: Auto-buy otomatis (jika diaktifkan)
         elseif AUTO_BUY_AUTO_ENABLED then
             local sales = result.salesHistory
             local rap = result.rap
