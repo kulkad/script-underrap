@@ -35,9 +35,9 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 20
-local SAFE_HOP_COOLDOWN_SECONDS = 35
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
+local SAFE_SCAN_COOLDOWN_SECONDS = 30    
+local SAFE_HOP_COOLDOWN_SECONDS = 50     
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 30   
 local SAFE_SERVER_HOP_RETRY_LIMIT = 2
 
 local WEBHOOK_DELAY_SECONDS = 2
@@ -2096,22 +2096,28 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
         return false
     end
 
-    -- Konversi ownerId ke Player object kalau online
+    -- Cari Player online
     local numericOwnerId = tonumber(ownerId)
     local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId   -- kalau offline, kirim userId aja
+    local ownerArg = player or ownerId   -- kalau offline kirim userId
 
-    local success, result = pcall(function()
-        return BoothController:PurchaseListing(ownerArg, listingId)
-    end)
+    -- Retry 2x
+    for attempt = 1, 3 do
+        local success, result = pcall(function()
+            return BoothController:PurchaseListing(ownerArg, listingId)
+        end)
 
-    if success then
-        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-        return true
-    else
-        warn("[AUTO-BUY] ❌ Gagal beli", itemName, ":", tostring(result))
-        return false
+        if success then
+            print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+            return true
+        else
+            warn("[AUTO-BUY] ❌ Gagal (percobaan "..attempt.."):", tostring(result))
+            if attempt < 3 then
+                task.wait(0.5 * attempt)
+            end
+        end
     end
+    return false
 end
 
 --==================================================
@@ -3421,114 +3427,51 @@ print("======================================")
 
     local webhookCount = 0
 
-    for ownerId, listings
-        in pairs(groupedListings) do
+    -- Pertama kirim semua NUKE dan DEEP_UNDERRAP dan normal underrap (non-boosted)
+-- Kemudian kirim BOOSTED setelah semua yang lain.
 
-        for _, listing
-            in ipairs(listings) do
+-- Fungsi bantu kirim dengan batas webhookCount
+local function sendWithLimit(webhookType, ownerId, listing)
+    if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+        return false
+    end
+    local sent = sendWebhook(webhookType, ownerId, listing)
+    if sent then
+        webhookCount += 1
+    end
+    task.wait(WEBHOOK_DELAY_SECONDS)
+    return sent
+end
 
-            if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                break
-            end
+-- PHASE 1: Kirim semua non-boosted (NUKE, deep, normal)
+for ownerId, listings in pairs(groupedListings) do
+    for _, listing in ipairs(listings) do
+        if listing.nuke then
+            sendWithLimit("NUKE", ownerId, listing)
+        end
+    end
+end
 
-            --==========================================
-            -- NUKE
-            --==========================================
-
-            if listing.nuke then
-
-                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                    break
-                end
-
-                local sent =
-                    sendWebhook(
-                        "NUKE",
-                        ownerId,
-                        listing
-                    )
-
-                if sent then
-                    webhookCount += 1
-                end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
-            end
-
-            --==========================================
-            -- BOOSTED
-            --==========================================
-
-            if listing.boosted then
-
-                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                    break
-                end
-
-                local sent =
-                    sendWebhook(
-                        "BOOSTED",
-                        ownerId,
-                        listing
-                    )
-
-                if sent then
-                    webhookCount += 1
-                end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
-            end
-
-            --==========================================
-            -- NORMAL UNDERRAP
-            --==========================================
-
-            if listing.price < listing.rap
-                and listing.discount >=
-                    getUnderrapThreshold(
-                        listing.tierName
-                    )
-                and not listing.boosted
-                and not listing.nuke then
-
-                local webhookType
-
-                if listing.deepUnderrap then
-
-                    webhookType =
-                        "DEEP_UNDERRAP"
-
-                else
-
-                    webhookType =
-                        listing.tierName
-                end
-
-                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
-                    break
-                end
-
-                local sent =
-                    sendWebhook(
-                        webhookType,
-                        ownerId,
-                        listing
-                    )
-
-                if sent then
-                    webhookCount += 1
-                end
-
-                task.wait(
-                    WEBHOOK_DELAY_SECONDS
-                )
+for ownerId, listings in pairs(groupedListings) do
+    for _, listing in ipairs(listings) do
+        if not listing.boosted and not listing.nuke then
+            -- normal underrap
+            if listing.price < listing.rap and listing.discount >= getUnderrapThreshold(listing.tierName) then
+                local webhookType = listing.deepUnderrap and "DEEP_UNDERRAP" or listing.tierName
+                sendWithLimit(webhookType, ownerId, listing)
             end
         end
     end
+end
+
+-- PHASE 2: Kirim BOOSTED (setelah semua selesai)
+for ownerId, listings in pairs(groupedListings) do
+    for _, listing in ipairs(listings) do
+        if listing.boosted then
+            sendWithLimit("BOOSTED", ownerId, listing)
+        end
+    end
+end
 
     --==================================================
     -- SCAN SUMMARY
@@ -3557,34 +3500,22 @@ print("======================================")
         "======================================"
     )
 
-    --==================================================
+        --==================================================
     -- SERVER HOP ONLY AFTER WEBHOOK
     --==================================================
 
     if ENABLE_SERVER_HOP then
-
-        print(
-            "[Scanner] Webhook phase selesai."
-        )
-
+        print("[Scanner] Webhook phase selesai.")
+        print("[Scanner] Menunggu 5 detik sebelum server hop...")
+        task.wait(5)
         if SAFE_MODE then
-            print(
-                "[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam."
-            )
+            print("[Scanner] Anti-kick mode aktif: hop dibatasi dan tidak spam.")
         end
-
-        print(
-            "[Scanner] Starting server hop..."
-        )
-
+        print("[Scanner] Starting server hop...")
         preparedServerId = nil
         serverHop()
-
     else
-
-        print(
-            "[Server Hop] Disabled."
-        )
+        print("[Server Hop] Disabled.")
     end
 
     hopAttemptCount = 0
