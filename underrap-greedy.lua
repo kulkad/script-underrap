@@ -34,6 +34,7 @@ local DEEP_UNDERRAP_PERCENT = 50
 local DEBUG = false
 local DUMP_RAW_DATA = false
 
+local INITIAL_LOAD_DELAY_SECONDS = 18   -- delay awal setelah join server sebelum scan
 local SAFE_MODE = true
 local SAFE_SCAN_COOLDOWN_SECONDS = 45   
 local SAFE_HOP_COOLDOWN_SECONDS = 70   
@@ -66,6 +67,7 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
+
 
 --==================================================
 -- AUTO-BUY OTOMATIS (dua level)
@@ -3248,6 +3250,8 @@ local function scan()
     scanInProgress = true
     lastScanAt = os.clock()
 
+    
+
     print(
         "======================================"
     )
@@ -3260,10 +3264,14 @@ local function scan()
         "======================================"
     )
 
+    -- Delay awal untuk memastikan booth data termuat (terutama setelah join server)
+    print("[Scanner] Menunggu "..INITIAL_LOAD_DELAY_SECONDS.." detik untuk memuat data booth...")
+    task.wait(INITIAL_LOAD_DELAY_SECONDS)
+
     -- Jeda acak 3-8 detik agar tidak terdeteksi pola
-local jitter = math.random(3, 8)
-print("[Scanner] Menunggu "..jitter.." detik (jitter) sebelum scan...")
-task.wait(jitter)
+    local jitter = math.random(3, 8)
+    print("[Scanner] Menunggu "..jitter.." detik (jitter) sebelum scan...")
+    task.wait(jitter)
 
     --==================================================
     -- GET BOOTH DATA
