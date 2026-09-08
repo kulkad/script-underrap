@@ -34,21 +34,20 @@ local DEEP_UNDERRAP_PERCENT = 50
 local DEBUG = false
 local DUMP_RAW_DATA = false
 
-local INITIAL_LOAD_DELAY_SECONDS = 18   -- delay awal setelah join server sebelum scan
 local SAFE_MODE = true
 local SAFE_SCAN_COOLDOWN_SECONDS = 45   
 local SAFE_HOP_COOLDOWN_SECONDS = 70   
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 30   
 local SAFE_SERVER_HOP_RETRY_LIMIT = 2
 
-local WEBHOOK_DELAY_SECONDS = 2
-local BOOTH_LOAD_DELAY_SECONDS = 5
-local BOOTH_LOAD_TIMEOUT_SECONDS = 20
+local WEBHOOK_DELAY_SECONDS = 1.5       -- turun dari 2
+local BOOTH_LOAD_DELAY_SECONDS = 2      -- turun dari 5
+local BOOTH_LOAD_TIMEOUT_SECONDS = 10   -- turun dari 20
 local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 5
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
+local SERVER_HOP_DELAY_SECONDS = 2      -- turun dari 5
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 2  -- turun dari 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -1588,7 +1587,7 @@ local function getLoadedBoothData()
             )
         end
 
-        task.wait(1)
+        task.wait(0.5)
 
     until os.clock() >= deadline
 
@@ -3139,9 +3138,9 @@ serverHop = function(serverId)
     )
 
     if not serverId then
-        local hopJitter = math.random(2, 6)
-print("[Server Hop] Jeda acak "..hopJitter.." detik sebelum cari server...")
-task.wait(hopJitter)
+        local hopJitter = math.random(1, 3)   -- sebelumnya 2-6
+            print("[Server Hop] Jeda acak "..hopJitter.." detik sebelum cari server...")
+            task.wait(hopJitter)
         task.wait(
             SERVER_HOP_DELAY_SECONDS
         )
@@ -3264,12 +3263,7 @@ local function scan()
         "======================================"
     )
 
-    -- Delay awal untuk memastikan booth data termuat (terutama setelah join server)
-    print("[Scanner] Menunggu "..INITIAL_LOAD_DELAY_SECONDS.." detik untuk memuat data booth...")
-    task.wait(INITIAL_LOAD_DELAY_SECONDS)
-
-    -- Jeda acak 3-8 detik agar tidak terdeteksi pola
-    local jitter = math.random(3, 8)
+    local jitter = math.random(1, 2)   -- sebelumnya 3-8
     print("[Scanner] Menunggu "..jitter.." detik (jitter) sebelum scan...")
     task.wait(jitter)
 
