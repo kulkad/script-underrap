@@ -37,11 +37,11 @@ local DUMP_RAW_DATA = false
 local SAFE_MODE = true
 local SAFE_SCAN_COOLDOWN_SECONDS = 20
 local SAFE_HOP_COOLDOWN_SECONDS = 35
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
 local STARTUP_DELAY_SECONDS = math.random(5, 10)
-local WEBHOOK_DELAY_SECONDS = 1
+local WEBHOOK_DELAY_SECONDS = 2
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
@@ -3133,6 +3133,8 @@ serverHop = function(serverId)
     print(
         "[Server Hop] Semua webhook sudah dikirim."
     )
+
+    task.wait(5)   -- <-- tambahkan jeda 5 detik
 
     if not serverId then
         print(
