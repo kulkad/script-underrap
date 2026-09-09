@@ -154,36 +154,36 @@ local AUTO_BUY_LIST = {
     ["Neo-Neko Katana"] = 490,
     ["Witch's Curse"] = 3000,
     ["Wind Thorn"] = 1000,
-    ["Jackolantern"] = 16000,
+    ["Jackolantern"] = 16000,          -- ambil harga termurah (16000)
     ["Eternal Piercer"] = 28000,
-    ["Valentine Hearts"] = 8700,
-    ["Rose Gift"] = 9500,
-    ["Love For You"] = 12500,
-    ["Chroma Blade"] = 13900,
+    ["Valentine Hearts"] = 8700,       -- Emote
+    ["Rose Gift"] = 9500,              -- Emote
+    ["Love For You"] = 12500,          -- Emote
+    ["Chroma Blade"] = 13700,          -- ambil harga termurah (13700)
     ["King Blade"] = 12000,
-    ["Puppy"] = 16000,
+    ["Puppy"] = 16000,                 -- ambil harga termurah (16000)
     ["Flaming Sword"] = 3100,
     ["Pillow"] = 2400,
     ["Royal Duality"] = 45000,
     ["Holy Blade"] = 2000,
     ["Higanbana Katana"] = 3900,
-    ["Moonflower Katana"] = 18000,
+    ["Moonflower Katana"] = 18000,     -- ambil harga termurah (18000)
     ["Evil Deal"] = 3000,
     ["Kitty Rocket"] = 9000,
     ["Cat Paw"] = 11000,
     ["Brutality Affection Bat"] = 7200,
-    ["Borealis"] = 27000,
+    ["Borealis"] = 26500,              -- ambil harga termurah (26500)
     ["Celestial Whisper"] = 22000,
     ["Reindeer"] = 32000,
     ["Siam Ember Axe"] = 98000,
-    ["Zombie Slide"] = 100000,
+    ["Zombie Slide"] = 100000,         -- Emote
     ["Prince Blade"] = 2550,
     ["Slime"] = 7500,
     ["Aligned Constellation"] = 4100,
-    ["Dancinha"] = 3000,
+    ["Dancinha"] = 3000,               -- Emote
     ["Riftflare Katana"] = 3000,
     ["Fox Katana"] = 5500,
-    ["Milk & Cookies"] = 3000,
+    ["Milk & Cookies"] = 3000,         -- Emote
     ["Kraken"] = 6900,
     ["Sakura's Requiem"] = 3900,
     ["Hitman"] = 5300,
@@ -193,7 +193,17 @@ local AUTO_BUY_LIST = {
     ["Icebound Dominus"] = 28000,
     ["Regret Blades"] = 19000,
     ["Eternum Galepiercer"] = 8000,
-    ["Phantom Chase"] = 62,
+    ["Phantom Chase"] = 62,            -- Emote
+    -- ===== ITEM BARU =====
+    ["Wicked Crow"] = 9000,
+    ["Black Ninja Katana"] = 9000,
+    ["Loving Backblade"] = 9000,
+    ["T-Rex"] = 11500,
+    ["Kitty Launcher"] = 17500,
+    ["Fallen Angel"] = 21000,
+    ["Chroma Ninja Katana"] = 24500,
+    ["Chroma Seal"] = 31000,
+    ["Seraphim"] = 42000,
 }
 
 --==================================================
@@ -689,7 +699,7 @@ local function safeRequest(options, retries)
         return nil
     end
 
-    retries = retries or 2
+    retries = retries or 3  -- default 3
 
     for attempt = 1, retries + 1 do
         local success, response = pcall(function()
@@ -703,6 +713,19 @@ local function safeRequest(options, retries)
 
         if success and response then
             local statusCode = tonumber(response.StatusCode)
+
+            if statusCode == 429 then
+                -- Rate limit: tunggu sesuai Retry-After
+                local waitTime = 2  -- default
+                if response.Headers and response.Headers["Retry-After"] then
+                    waitTime = tonumber(response.Headers["Retry-After"]) or 2
+                end
+                if attempt <= retries then
+                    warn("[REQUEST] Rate limit (429), menunggu", waitTime, "detik...")
+                    task.wait(waitTime + 0.5)
+                    continue
+                end
+            end
 
             if not statusCode
                 or (statusCode >= 200 and statusCode < 300)
@@ -2432,6 +2455,7 @@ local function sendWebhook(
         },
     }
 
+    -- ===== PERBAIKAN: retry 3 dan logging =====
     local response = safeRequest({
         Url = webhookUrl,
         Method = "POST",
@@ -2439,14 +2463,16 @@ local function sendWebhook(
             ["Content-Type"] = "application/json",
         },
         Body = HttpService:JSONEncode(payload),
-    }, 1)
+    }, 3)   -- <-- retry 3 kali
 
     if not response then
-        warn(
-            "[WEBHOOK ERROR]",
-            tostring(webhookType)
-        )
+        warn("[WEBHOOK] No response from Discord for", webhookType, listing.itemName)
+        return false
+    end
 
+    local status = tonumber(response.StatusCode)
+    if status and status >= 400 then
+        warn("[WEBHOOK] Discord error", status, "for", webhookType, ":", tostring(response.Body))
         return false
     end
 
