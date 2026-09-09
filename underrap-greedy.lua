@@ -7,7 +7,7 @@
 --// 5. Setelah webhook selesai, scanner baru server hop
 --// 6. Server hop memakai Roblox Public Server API
 --// 7. Menangani TeleportInitFailed
---// + AUTO-BUY (by request)
+--// + AUTO-BUY & SALES CHART (ditambahkan)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -37,16 +37,15 @@ local DUMP_RAW_DATA = false
 local SAFE_MODE = true
 local SAFE_SCAN_COOLDOWN_SECONDS = 20
 local SAFE_HOP_COOLDOWN_SECONDS = 35
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
-local SAFE_SERVER_HOP_RETRY_LIMIT = 2
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 5
+local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 2
+local STARTUP_DELAY_SECONDS = math.random(5, 10)
+local WEBHOOK_DELAY_SECONDS = 1
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
-local SALES_HISTORY_DAYS = 6
-local MIN_SALES_COUNT = 20
 
-local SERVER_HOP_DELAY_SECONDS = 5
+local SERVER_HOP_DELAY_SECONDS = 0
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
@@ -68,7 +67,7 @@ local lastTeleportTargetId = nil
 local preparedServerId = nil
 
 --==================================================
--- AUTO-BUY CONFIG
+-- AUTO-BUY CONFIG (TAMBAHAN)
 --==================================================
 
 local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
@@ -198,9 +197,15 @@ local AUTO_BUY_LIST = {
 }
 
 --==================================================
+-- SALES HISTORY CONFIG (TAMBAHAN)
+--==================================================
+
+local SALES_HISTORY_DAYS = 6
+local MIN_SALES_COUNT = 20
+
+--==================================================
 -- WEBHOOKS
 --==================================================
--- MASUKKAN WEBHOOK URL LU YANG SEBELUMNYA DI SINI
 
 local WEBHOOKS = {
     LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
@@ -224,6 +229,9 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Awakened Subversion"] = true,
+    ["Gleaming Katana"] = true,
+    ["Cyber Scythe"] = true,
     ["Awakened Megatooth Relic"] = true,
     ["Dual Frog Blasters"] = true,
     ["Primordial Lance"] = true,
@@ -740,12 +748,6 @@ local Controllers =
 local Trading =
     Controllers:WaitForChild("Trading")
 
-local Net =
-    require(ReplicatedStorage.Packages.Net)
-
-local RAPHistoryRequest =
-    Net:RemoteFunction("RequestRAPHistory")
-
 local BoothController =
     require(Controllers.Booth.BoothController)
 
@@ -786,138 +788,11 @@ end
 print("[Scanner] BoothListings ditemukan:", BoothListings)
 
 --==================================================
--- HELPERS
+-- SALES HISTORY & AUTO-BUY (TAMBAHAN)
 --==================================================
 
-local function dump(value, depth, visited)
-    depth = depth or 0
-    visited = visited or {}
-
-    if depth > 4 then
-        return "<max depth>"
-    end
-
-    if typeof(value) ~= "table" then
-        return tostring(value)
-    end
-
-    if visited[value] then
-        return "<circular>"
-    end
-
-    visited[value] = true
-
-    local result = "{\n"
-
-    for k, v in pairs(value) do
-        result ..= string.rep("    ", depth + 1)
-        result ..= "[" .. tostring(k) .. "] = "
-
-        if typeof(v) == "table" then
-            result ..= dump(v, depth + 1, visited)
-        else
-            result ..= tostring(v)
-        end
-
-        result ..= ",\n"
-    end
-
-    result ..= string.rep("    ", depth) .. "}"
-
-    return result
-end
-
-local unresolvedListingLogged = false
-
-local function getListingItemKey(listing)
-    if typeof(listing) ~= "table" then
-        return nil
-    end
-
-    local directKey =
-        listing.ItemKey
-        or listing.itemKey
-        or listing.Key
-        or listing.key
-        or listing.ItemName
-        or listing.itemName
-
-    if directKey then
-        return directKey
-    end
-
-    local nestedItem = listing.Item
-
-    if nestedItem then
-        local success, nestedKey =
-            pcall(function()
-                return nestedItem.Name
-                    or nestedItem.name
-                    or nestedItem.ItemName
-                    or nestedItem.itemName
-                    or nestedItem.ItemKey
-                    or nestedItem.itemKey
-            end)
-
-        if success and nestedKey then
-            return nestedKey
-        end
-    end
-
-    if not unresolvedListingLogged and DEBUG then
-        unresolvedListingLogged = true
-
-        warn("[NO ITEM KEY] Listing shape:")
-        print(dump(listing, 3))
-    end
-
-    return nil
-end
-
---==================================================
--- RAP HELPERS
---==================================================
-
-local function getFilteredItemKey(itemType, item)
-    local success, result =
-        pcall(function()
-            return RAPController:GetFilteredItemKey(
-                itemType,
-                item
-            )
-        end)
-
-    if not success then
-        if DEBUG then
-            warn("[ITEM KEY ERROR]", result)
-        end
-
-        return nil
-    end
-
-    return result
-end
-
-local function getRAP(itemType, itemKey)
-    local success, result =
-        pcall(function()
-            return RAPController:GetRAPAsync(
-                itemType,
-                itemKey,
-                true
-            )
-        end)
-
-    if not success then
-        if DEBUG then
-            warn("[RAP ERROR]", result)
-        end
-
-        return nil
-    end
-
-    return result
-end
+local Net = require(ReplicatedStorage.Packages.Net)
+local RAPHistoryRequest = Net:RemoteFunction("RequestRAPHistory")
 
 local SalesHistoryCache = {}
 
@@ -1094,6 +969,171 @@ local function getSalesHistory(itemType, itemKey)
     }
 
     SalesHistoryCache[cacheKey] = result
+    return result
+end
+
+local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
+    if not AUTO_BUY_ENABLED then return false end
+    if price > maxPrice then
+        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
+        return false
+    end
+
+    local numericOwnerId = tonumber(ownerId)
+    local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
+    local ownerArg = player or ownerId
+
+    print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", ownerArg, "listingId:", listingId)
+
+    for attempt = 1, 3 do
+        local success, result = pcall(function()
+            return BoothController:PurchaseListing(ownerArg, listingId)
+        end)
+
+        if success then
+            print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+            return true
+        else
+            warn("[AUTO-BUY] ❌ Gagal (percobaan "..attempt.."):", tostring(result))
+            if attempt < 3 then
+                task.wait(0.5 * attempt)
+            end
+        end
+    end
+    return false
+end
+
+--==================================================
+-- HELPERS
+--==================================================
+
+local function dump(value, depth, visited)
+    depth = depth or 0
+    visited = visited or {}
+
+    if depth > 4 then
+        return "<max depth>"
+    end
+
+    if typeof(value) ~= "table" then
+        return tostring(value)
+    end
+
+    if visited[value] then
+        return "<circular>"
+    end
+
+    visited[value] = true
+
+    local result = "{\n"
+
+    for k, v in pairs(value) do
+        result ..= string.rep("    ", depth + 1)
+        result ..= "[" .. tostring(k) .. "] = "
+
+        if typeof(v) == "table" then
+            result ..= dump(v, depth + 1, visited)
+        else
+            result ..= tostring(v)
+        end
+
+        result ..= ",\n"
+    end
+
+    result ..= string.rep("    ", depth) .. "}"
+
+    return result
+end
+
+local unresolvedListingLogged = false
+
+local function getListingItemKey(listing)
+    if typeof(listing) ~= "table" then
+        return nil
+    end
+
+    local directKey =
+        listing.ItemKey
+        or listing.itemKey
+        or listing.Key
+        or listing.key
+        or listing.ItemName
+        or listing.itemName
+
+    if directKey then
+        return directKey
+    end
+
+    local nestedItem = listing.Item
+
+    if nestedItem then
+        local success, nestedKey =
+            pcall(function()
+                return nestedItem.Name
+                    or nestedItem.name
+                    or nestedItem.ItemName
+                    or nestedItem.itemName
+                    or nestedItem.ItemKey
+                    or nestedItem.itemKey
+            end)
+
+        if success and nestedKey then
+            return nestedKey
+        end
+    end
+
+    if not unresolvedListingLogged and DEBUG then
+        unresolvedListingLogged = true
+
+        warn("[NO ITEM KEY] Listing shape:")
+        print(dump(listing, 3))
+    end
+
+    return nil
+end
+
+--==================================================
+-- RAP HELPERS
+--==================================================
+
+local function getFilteredItemKey(itemType, item)
+    local success, result =
+        pcall(function()
+            return RAPController:GetFilteredItemKey(
+                itemType,
+                item
+            )
+        end)
+
+    if not success then
+        if DEBUG then
+            warn("[ITEM KEY ERROR]", result)
+        end
+
+        return nil
+    end
+
+    return result
+end
+
+local function getRAP(itemType, itemKey)
+    local success, result =
+        pcall(function()
+            return RAPController:GetRAPAsync(
+                itemType,
+                itemKey,
+                true
+            )
+        end)
+
+    if not success then
+        if DEBUG then
+            warn("[RAP ERROR]", result)
+        end
+
+        return nil
+    end
+
     return result
 end
 
@@ -2085,40 +2125,8 @@ local function getTierColor(tierName)
         or 65280
 end
 
-local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
-    if not AUTO_BUY_ENABLED then return false end
-    if price > maxPrice then
-        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
-        return false
-    end
-
-    -- Cari Player online
-    local numericOwnerId = tonumber(ownerId)
-    local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId  -- kirim Player object jika online, userId jika offline
-
-    print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", ownerArg, "listingId:", listingId)
-
-    -- Retry 2x
-    for attempt = 1, 3 do
-        local success, result = pcall(function()
-            return BoothController:PurchaseListing(ownerArg, listingId)
-        end)
-
-        if success then
-            print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-            return true
-        else
-            warn("[AUTO-BUY] ❌ Gagal (percobaan "..attempt.."):", tostring(result))
-            if attempt < 3 then
-                task.wait(0.5 * attempt)
-            end
-        end
-    end
-    return false
-end
 --==================================================
--- WEBHOOK
+-- WEBHOOK (dimodifikasi untuk SALES CHART)
 --==================================================
 
 local function sendWebhook(
@@ -2307,6 +2315,22 @@ local function sendWebhook(
     })
 
     --==================================================
+    -- SALES HISTORY STATS (TAMBAHAN)
+    --==================================================
+
+    if listing.salesHistory then
+        table.insert(fields, {
+            name = "📊 Sales Trend (last " .. SALES_HISTORY_DAYS .. " days)",
+            value = string.format(
+                "Avg RAP: **%s** | Total Sales: **%s**",
+                tostring(listing.salesHistory.averageRap),
+                tostring(listing.salesHistory.totalSales)
+            ),
+            inline = false,
+        })
+    end
+
+    --==================================================
     -- SERVER
     --==================================================
 
@@ -2383,6 +2407,10 @@ local function sendWebhook(
         end
     end
 
+    --==================================================
+    -- ADD SALES CHART (TAMBAHAN)
+    --==================================================
+
     if listing.salesHistory
         and listing.salesHistory.chartUrl then
 
@@ -2438,7 +2466,7 @@ local function sendWebhook(
 end
 
 --==================================================
--- LISTING PARSER
+-- LISTING PARSER (dimodifikasi untuk SALES HISTORY)
 --==================================================
 
 local function inspectListing(
@@ -2721,6 +2749,10 @@ local function inspectListing(
         DEEP_UNDERRAP_PERCENT
     and not boosted
 
+    --==================================================
+    -- SALES HISTORY (TAMBAHAN)
+    --==================================================
+
     local salesHistory
 
     if (isUnderrap or isNuke) and not boosted then
@@ -2842,7 +2874,7 @@ local function inspectListing(
 
             boothClaimed = boothMetadata.claimed,
             boothLocation = boothMetadata.location,
-            salesHistory = salesHistory,
+            salesHistory = salesHistory,   -- <-- TAMBAHAN
         }
     end
 end
@@ -3259,51 +3291,6 @@ local function scan()
         countListings(data)
 
     local boothsByOwnerId = buildBoothIndex()
-    print("======================================")
-print("[BOOTH INDEX] Claimed booths:")
-print("======================================")
-
-for ownerId, boothData in pairs(boothsByOwnerId) do
-    print(
-        "[CLAIMED]",
-        "Owner:",
-        tostring(ownerId),
-        "| Booth:",
-        boothData.booth
-            and boothData.booth:GetFullName()
-            or "nil"
-    )
-end
-
-print("======================================")
-
-    print(
-        "[Scanner] Booth listings loaded:",
-        loadedListingCount
-    )
-    print("======================================")
-print("[LISTING -> BOOTH MATCH TEST]")
-print("======================================")
-
-for ownerId, listings in pairs(data) do
-
-    local boothData =
-        boothsByOwnerId[
-            normalizeId(ownerId)
-        ]
-
-    print(
-        "[OWNER]",
-        tostring(ownerId),
-        "| Booth:",
-        boothData
-            and boothData.booth
-            and boothData.booth:GetFullName()
-            or "NOT FOUND"
-    )
-end
-
-print("======================================")
 
     if loadedListingCount == 0 then
 
@@ -3372,17 +3359,16 @@ print("======================================")
                     detectedCount += 1
 
                     --==================================================
-                    -- AUTO-BUY CHECK
+                    -- AUTO-BUY (TAMBAHAN)
                     --==================================================
 
                     if AUTO_BUY_ENABLED then
-    local maxPrice = AUTO_BUY_LIST[result.itemName]
-    if maxPrice then
-        -- Ambil listingId yang benar (bisa dari properti listing)
-        local realListingId = listing.Id or listing.listingId or listingId
-        attemptPurchase(ownerId, realListingId, result.itemName, result.price, maxPrice)
-    end
-end
+                        local maxPrice = AUTO_BUY_LIST[result.itemName]
+                        if maxPrice then
+                            -- listingId adalah key dari tabel listings, kita pakai itu
+                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+                        end
+                    end
 
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
@@ -3600,4 +3586,6 @@ end
 -- RUN
 --==================================================
 
+print("[Scanner] Menunggu " .. STARTUP_DELAY_SECONDS .. " detik sebelum memulai scan...")
+task.wait(STARTUP_DELAY_SECONDS)
 scan()
