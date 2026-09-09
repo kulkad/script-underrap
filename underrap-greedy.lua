@@ -81,6 +81,8 @@ local AUTO_BUY_LIST = {
     ["Floppy Chicken"] = 3400,
     ["Moonflower Greatsword"] = 3300,
     ["Starwand"] = 3200,
+    ["Evil Cyborg Blade"] = 750,
+    ["Gravelight"] = 4500,
     ["Hellfire King"] = 3200,
     ["Hollow Oath Katana"] = 3200,
     ["Black Oni katana"] = 3200,
@@ -213,6 +215,14 @@ local AUTO_BUY_LIST = {
 local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
+-- Syarat auto-buy untuk under-100 dan under-50%
+local AUTO_BUY_MIN_DAYS_WITH_SALES = 3          -- minimal berapa hari yang mencapai target
+local AUTO_BUY_MIN_DAILY_SALES = 50             -- target penjualan per hari
+-- Dynamic boosted detection (untuk deteksi item yang RAP-nya dimanipulasi)
+local DYNAMIC_BOOSTED_ENABLED = true
+local DYNAMIC_BOOSTED_RAP_RATIO = 1.5          -- RAP sekarang > rata-rata * rasio ini
+local DYNAMIC_BOOSTED_MIN_TOTAL_SALES = 30     -- total sales di bawah ini dianggap mencurigakan
+
 --==================================================
 -- WEBHOOKS
 --==================================================
@@ -225,6 +235,7 @@ local WEBHOOKS = {
     BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
     NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
     DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
+    AUTO_BUY = "https://discord.com/api/webhooks/1547233702981935195/k4a4Gr7Xa_M2WE3n5-sIbwtjMzWEcR7uYGf0R9YM-fiuDoIoxm-Cu_2klo27mABt75Bm"  -- <-- tambahin ini
 }
 
 --==================================================
@@ -239,6 +250,7 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Lumina Bow"] = true,
     ["Awakened Subversion"] = true,
     ["Gleaming Katana"] = true,
     ["Cyber Scythe"] = true,
@@ -250,12 +262,12 @@ local BOOSTED_ITEMS = {
     ["Ocean Surfer"] = true,
     ["Knighthood"] = true,
     ["Hug"] = true,
+    ["Royal Throne"] = true,
     ["Gravebone Scythe"] = true,
     ["Loving Backblade"] = true,
     ["Blackhole Gauntlets"] = true,
     ["Onyx Katana"] = true,
     ["Pastel Spear"] = true,
-    ["Nature Cards"] = true,
     ["Solar Saber"] = true,
     ["Remastered Linked Sword"] = true,
     ["Prince Legacy Scythe"] = true,
@@ -335,11 +347,10 @@ local BOOSTED_ITEMS = {
     ["Clan Ascendancy"] = true,
     ["New Years Slicer"] = true,
     ["Dual Frosted Gleam"] = true,
-    ["Dual Sakura Fan"] = true,
-    ["Awakened Winter's Touch"] = true,
     ["Ranked Season 20 Champion"] = true,
     ["Dual Sakura Fan"] = true,
     ["Frog"] = true,
+    ["Y2K Blade"] = true,
     ["Dual Aurum Etherius"] = true,
     ["Inferno Greatscythe"] = true,
     ["Awakened Winter's Touch"] = true,
@@ -360,9 +371,7 @@ local BOOSTED_ITEMS = {
     ["Tropical Thunder"] = true,
     ["Casual Failure"] = true,
     ["Lightning Dagger"] = true,
-    ["Oni Claws"] = true,
     ["Dual Devil Katana"] = true,
-    ["Avis Scythe"] = true,
     ["Blade of Eras"] = true,
     ["Crystal Reaver"] = true,
     ["Galactic Annihilation"] = true,
@@ -378,7 +387,6 @@ local BOOSTED_ITEMS = {
     ["Mummy's Curse"] = true,
     ["Resolution Blade"] = true,
     ["Off with your Head"] = true,
-    ["Lightning Dagger"] = true,
     ["New Years Greatsword"] = true,
     ["Valkyrien Blade"] = true,
     ["Skeleton Phantom"] = true,
@@ -406,7 +414,6 @@ local BOOSTED_ITEMS = {
     ["Gilded Harvest"] = true,
     ["Frosted Trails"] = true,
     ["Frying Windmill"] = true,
-    ["Gravelight"] = true,
     ["Mythical Enchanter"] = true,
     ["Proposal"] = true,
     ["Skeleton Dance"] = true,
@@ -825,38 +832,25 @@ local function getSalesHistory(itemType, itemKey)
         return nil
     end
 
-    local cacheKey =
-        tostring(itemType)
-        .. ":"
-        .. tostring(itemKey)
+    local cacheKey = tostring(itemType) .. ":" .. tostring(itemKey)
 
     if SalesHistoryCache[cacheKey] ~= nil then
         return SalesHistoryCache[cacheKey] or nil
     end
 
     local endDate = DateTime.now()
-    local startDate = DateTime.fromUnixTimestamp(
-        endDate.UnixTimestamp - SALES_HISTORY_DAYS * 86400
-    )
+    local startDate = DateTime.fromUnixTimestamp(endDate.UnixTimestamp - SALES_HISTORY_DAYS * 86400)
 
     local success, requestSuccess, points = pcall(function()
-        local invokeSuccess, history = RAPHistoryRequest:InvokeServer(
-            itemType,
-            itemKey,
-            startDate,
-            endDate
-        )
-
+        local invokeSuccess, history = RAPHistoryRequest:InvokeServer(itemType, itemKey, startDate, endDate)
         return invokeSuccess, history
     end)
 
     if not success or not requestSuccess or typeof(points) ~= "table" then
         SalesHistoryCache[cacheKey] = false
-
         if DEBUG then
             warn("[SALES HISTORY] Request failed:", itemType, itemKey)
         end
-
         return nil
     end
 
@@ -872,11 +866,7 @@ local function getSalesHistory(itemType, itemKey)
             and tonumber(point.Count)
         then
             local utcDate = point.Date:ToUniversalTime()
-            local day = DateTime.fromUniversalTime(
-                utcDate.Year,
-                utcDate.Month,
-                utcDate.Day
-            )
+            local day = DateTime.fromUniversalTime(utcDate.Year, utcDate.Month, utcDate.Day)
             local dayKey = day.UnixTimestamp
             local dayData = daily[dayKey]
 
@@ -893,12 +883,12 @@ local function getSalesHistory(itemType, itemKey)
             local rapValue = tonumber(point.RAP)
             local sales = tonumber(point.Count)
 
-            dayData.rapTotal += rapValue
-            dayData.pointCount += 1
-            dayData.sales += sales
-            totalSales += sales
-            rapTotal += rapValue
-            rapPointCount += 1
+            dayData.rapTotal = dayData.rapTotal + rapValue
+            dayData.pointCount = dayData.pointCount + 1
+            dayData.sales = dayData.sales + sales
+            totalSales = totalSales + sales
+            rapTotal = rapTotal + rapValue
+            rapPointCount = rapPointCount + 1
         end
     end
 
@@ -927,15 +917,18 @@ local function getSalesHistory(itemType, itemKey)
             hasSalesDayOverThreshold = true
         end
 
-        table.insert(
-            chartLabels,
-            dayData.date:FormatUniversalTime("MMM D", "en-us")
-        )
-        table.insert(
-            chartValues,
-            math.round(dayData.rapTotal / dayData.pointCount)
-        )
+        table.insert(chartLabels, dayData.date:FormatUniversalTime("MMM D", "en-us"))
+        table.insert(chartValues, math.round(dayData.rapTotal / dayData.pointCount))
         table.insert(chartSales, dayData.sales)
+    end
+
+    -- ============ PERBAIKAN DI SINI ============
+    -- Hitung jumlah hari yang mencapai target sales
+    local daysAboveThreshold = 0
+    for _, dayData in pairs(daily) do
+        if dayData.sales >= AUTO_BUY_MIN_DAILY_SALES then
+            daysAboveThreshold = daysAboveThreshold + 1
+        end
     end
 
     local chartConfig = {
@@ -979,17 +972,15 @@ local function getSalesHistory(itemType, itemKey)
         },
     }
 
-    local chartUrl =
-        "https://quickchart.io/chart?width=900&height=460&format=png&c="
-        .. HttpService:UrlEncode(
-            HttpService:JSONEncode(chartConfig)
-        )
+    local chartUrl = "https://quickchart.io/chart?width=900&height=460&format=png&c="
+        .. HttpService:UrlEncode(HttpService:JSONEncode(chartConfig))
 
     local result = {
         totalSales = totalSales,
         averageRap = math.round(rapTotal / rapPointCount),
         hasSalesDayOverThreshold = hasSalesDayOverThreshold,
         chartUrl = chartUrl,
+        daysAboveThreshold = daysAboveThreshold,   -- <-- sekarang sudah terdefinisi
     }
 
     SalesHistoryCache[cacheKey] = result
@@ -2493,6 +2484,127 @@ local function sendWebhook(
 end
 
 --==================================================
+-- AUTO-BUY WEBHOOK NOTIFICATION
+--==================================================
+
+local function sendAutoBuyWebhook(itemName, itemType, itemKey, price, rap, profit, discount, ownerId)
+    local webhookUrl = WEBHOOKS.AUTO_BUY
+    if not webhookUrl or webhookUrl == "" or string.find(webhookUrl, "PASTE_") then
+        warn("[AUTO-BUY WEBHOOK] URL belum diisi.")
+        return false
+    end
+
+    if not REQUEST then
+        warn("[AUTO-BUY WEBHOOK] Request function tidak tersedia.")
+        return false
+    end
+
+    -- Dapatkan info akun pembeli (player yang menjalankan script)
+    local buyerName = LocalPlayer.Name
+    local buyerDisplayName = LocalPlayer.DisplayName
+    local buyerAvatarUrl = getOwnerAvatarUrl(LocalPlayer.UserId)  -- FIX: pakai fungsi yang sudah ada
+
+    -- Dapatkan info penjual (ownerId)
+    local ownerInfo = getOwnerInfo(ownerId)
+    local ownerProfileUrl = getOwnerProfileUrl(ownerId)
+    local itemImageUrl = getItemImageUrl(itemType, itemKey)
+
+    local embed = {
+        title = "🛒 AUTO-BUY SUCCESS",
+        color = 0x00ff00,  -- hijau
+        fields = {
+            {
+                name = "Buyer",
+                value = string.format("`%s` (%s)", buyerDisplayName, buyerName),
+                inline = true,
+            },
+            {
+                name = "Item",
+                value = string.format("`%s`", itemName),
+                inline = true,
+            },
+            {
+                name = "Type",
+                value = string.format("`%s`", itemType or "Unknown"),
+                inline = true,
+            },
+            {
+                name = "Price",
+                value = string.format("`%s`", price),
+                inline = true,
+            },
+            {
+                name = "RAP",
+                value = string.format("`%s`", rap),
+                inline = true,
+            },
+            {
+                name = "Profit",
+                value = string.format("`%s` (%.0f%%)", profit, discount or 0),
+                inline = true,
+            },
+            {
+                name = "Seller",
+                value = string.format("`%s`", ownerInfo.displayName or ownerInfo.username),
+                inline = true,
+            },
+        },
+        footer = {
+            text = "Seller ID: " .. tostring(ownerId),
+        },
+        timestamp = DateTime.now():ToIsoDate(),
+    }
+
+    if ownerProfileUrl then
+        table.insert(embed.fields, {
+            name = "Seller Profile",
+            value = ownerProfileUrl,
+            inline = false,
+        })
+    end
+
+    -- Thumbnail item
+    if itemImageUrl then
+        embed.thumbnail = {
+            url = itemImageUrl,
+        }
+    end
+
+    -- Jika buyerAvatarUrl valid, pakai sebagai avatar webhook
+    local payload = {
+        username = buyerDisplayName .. " ",
+        avatar_url = buyerAvatarUrl,  -- sudah dipastikan HTTP/HTTPS
+        embeds = { embed },
+    }
+
+    local response = safeRequest({
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json",
+        },
+        Body = HttpService:JSONEncode(payload),
+    }, 3)
+
+    if not response then
+        warn("[AUTO-BUY WEBHOOK] No response from Discord for", itemName)
+        return false
+    end
+
+    local status = tonumber(response.StatusCode)
+    if status and status >= 400 then
+        warn("[AUTO-BUY WEBHOOK] Discord error", status, ":", tostring(response.Body))
+        return false
+    end
+
+    if DEBUG then
+        print("[AUTO-BUY WEBHOOK] Sent:", itemName)
+    end
+
+    return true
+end
+
+--==================================================
 -- LISTING PARSER (dimodifikasi untuk SALES HISTORY)
 --==================================================
 
@@ -2506,6 +2618,10 @@ local function inspectListing(
     if typeof(listing) ~= "table" then
         return
     end
+
+    -- Skip harga rendah
+    local price = listing.Price or listing.price
+    if price and price < 50 then return end
 
     --==================================================
     -- RAW ITEM KEY
@@ -2765,23 +2881,13 @@ local function inspectListing(
                 tierName
             )
 
-    local boosted =
-        boostedCandidate
-        and isUnderrap
-
-    local isDeepUnderrap =
-    isUnderrap
-    and rap < 1000000
-    and discount >
-        DEEP_UNDERRAP_PERCENT
-    and not boosted
+        local boosted = boostedCandidate and isUnderrap
 
     --==================================================
-    -- SALES HISTORY (TAMBAHAN)
+    -- SALES HISTORY (TAMBAHAN) - diambil lebih awal
     --==================================================
 
     local salesHistory
-
     if (isUnderrap or isNuke) and not boosted then
         salesHistory = getSalesHistory(
             itemType,
@@ -2799,10 +2905,44 @@ local function inspectListing(
                     MIN_SALES_COUNT
                 )
             end
-
             return
         end
     end
+
+    --==================================================
+    -- DYNAMIC BOOSTED DETECTION (TAMBAHAN)
+    --==================================================
+    if not boosted and isUnderrap and DYNAMIC_BOOSTED_ENABLED then
+        local isDynamicBoosted = false
+        if not salesHistory then
+            -- Tidak ada data sales → item baru atau tidak laku → dianggap boosted
+            isDynamicBoosted = true
+        else
+            local avgRap = salesHistory.averageRap
+            local totalSales = salesHistory.totalSales
+            if avgRap and totalSales then
+                -- Cek lonjakan RAP tidak wajar
+                if rap > avgRap * DYNAMIC_BOOSTED_RAP_RATIO then
+                    isDynamicBoosted = true
+                -- Atau total sales sangat rendah (item baru/manipulasi)
+                elseif totalSales < DYNAMIC_BOOSTED_MIN_TOTAL_SALES then
+                    isDynamicBoosted = true
+                end
+            end
+        end
+
+        if isDynamicBoosted then
+            boosted = true
+            print("[DYNAMIC BOOSTED]", itemName, "RAP:", rap, "| AvgRap:", avgRap or "N/A", "| TotalSales:", totalSales or "N/A")
+        end
+    end
+
+    local isDeepUnderrap =
+    isUnderrap
+    and rap < 1000000
+    and discount >
+        DEEP_UNDERRAP_PERCENT
+    and not boosted
 
     --==================================================
     -- DEBUG
@@ -3388,16 +3528,60 @@ local function scan()
                     detectedCount += 1
 
                     --==================================================
-                    -- AUTO-BUY (TAMBAHAN)
-                    --==================================================
+-- AUTO-BUY (TAMBAHAN)
+--==================================================
 
-                    if AUTO_BUY_ENABLED then
-                        local maxPrice = AUTO_BUY_LIST[result.itemName]
-                        if maxPrice then
-                            -- listingId adalah key dari tabel listings, kita pakai itu
-                            attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
-                        end
-                    end
+if AUTO_BUY_ENABLED then
+    -- SKIP ITEM BOOSTED (biar gak auto-beli item yang RAP-nya dimanipulasi)
+    if result.boosted then
+        if DEBUG then
+            print("[AUTO-BUY] Skip boosted item:", result.itemName)
+        end
+    else
+        local shouldBuy = false
+        local maxPrice = nil
+
+        -- 1. PRIORITAS: cek apakah item ada di AUTO_BUY_LIST
+        if AUTO_BUY_LIST[result.itemName] then
+            maxPrice = AUTO_BUY_LIST[result.itemName]
+            shouldBuy = (result.price <= maxPrice)
+        else
+            -- 2. Kondisi under 100 (RAP < 1000 dan price <= RAP - 100)
+            if result.rap < 1000 and (result.rap - result.price) >= 100 then
+                if result.salesHistory and result.salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES then
+                    shouldBuy = true
+                    maxPrice = result.price
+                end
+            end
+
+            -- 3. Kondisi under 50% (price <= 0.5 * RAP)
+            if not shouldBuy and result.price <= result.rap * 0.5 then
+                if result.salesHistory and result.salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES then
+                    shouldBuy = true
+                    maxPrice = result.price
+                end
+            end
+        end
+
+    if shouldBuy then
+    local success = attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
+    if success then
+        task.spawn(function()
+            sendAutoBuyWebhook(
+                result.itemName,
+                result.itemType,
+                result.itemKey,       -- <-- tambahkan
+                result.price,
+                result.rap,
+                result.profit,
+                result.discount,
+                ownerId
+            )
+        end)
+    end
+end
+    end
+end
 
                     groupedListings[ownerId] =
                         groupedListings[ownerId]
