@@ -45,7 +45,7 @@ local WEBHOOK_DELAY_SECONDS = 2
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
-local SERVER_HOP_DELAY_SECONDS = 0
+local SERVER_HOP_DELAY_SECONDS = 10
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
@@ -56,6 +56,7 @@ local SERVER_API_MAX_PAGES = 3
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
 local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
+local visitedServers = {}   -- tambahkan di atas
 
 local lastServerHopAt = 0
 local lastScanAt = 0
@@ -152,7 +153,7 @@ local AUTO_BUY_LIST = {
     ["Kitty Katana"] = 12500,
     ["Neo-Neko Katana"] = 490,
     ["Witch's Curse"] = 3000,
-    ["Wind Thorn"] = 1000,
+    ["Wind Thorn"] = 800,
     ["Jackolantern"] = 16500,          -- ambil harga termurah (16000)
     ["Eternal Piercer"] = 28000,
     ["Valentine Hearts"] = 8500,       -- Emote
@@ -233,13 +234,13 @@ local DYNAMIC_BOOSTED_MIN_TOTAL_SALES = 30     -- total sales di bawah ini diang
 --==================================================
 
 local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1540647799954214962/JelVlhOdjg12dmfULla0O0kWJ1r43uSzG8eIkf2U71Cyh0uhOCOnMk5MFnJ5CSNhgZrT",
-    MID = "https://discord.com/api/webhooks/1540647796313563190/Z0S9wJiDmS3cGdsTNL95DFMCK7_rN3Smfw20R9Vgc_lHCs5HuBdlJUsCoMjBIg-IcyEN",
-    HIGH = "https://discord.com/api/webhooks/1540647989230702623/cy2z0xRydhttYIdYvMh-5b9s9hEgFbzFXJEVnBvZv5SNj-BEoUUfKscO6anbi9QKQ03X",
-    ["100K+"] = "https://discord.com/api/webhooks/1540648079580078131/XOvHGOidws-4kWf52JMg95z5a2-dnv50D5PnuP905CcbUgAZRPGi75l4eaXIOjs-zKN7",
-    BOOSTED = "https://discord.com/api/webhooks/1540648162815905832/cfutqmGiZh6gFY_xeiAMDhEZI4at_1A1Tu34LU9Pa1dhMHPQ4ekMXKNqW6Qzq5Tu_14Q",
-    NUKE = "https://discord.com/api/webhooks/1540648254482681937/LCmXm86xKbfp7uBhzgOC8PVlXZgE5RntgQwf4SgS7XUcKol94vVykCIxcGsr02Hufcn-",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1540648345226317855/LmytFGDSP03UZwV_HCcZ8GIo6cZky3I_x3QJIqRiIs2-eJvJwYoyZxt9nG1Qz0imWL-R",
+        LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
+    MID = "https://discord.com/api/webhooks/1543706710244589698/_THA47t4vJdnPYY23W5yFto012XfGIi7ULE23UAvr64ZIs7r6AG2cqu-FRLw3u36oo8x",
+    HIGH = "https://discord.com/api/webhooks/1543707373900660756/rNWk0OGFmxHNUStM4RN43nSMegf5xeNNFvFkGMwrub2SP7C05WzzcmwiVL_TkDQ0AGo2",
+    ["100K+"] = "https://discord.com/api/webhooks/1543707100637564999/3yeKaYamEkuKSrdSjTRVhOf_SSRZ_Dag3rCQBgjJLYzwILCnLZLo8_RiOqxNoBo9z8bA",
+    BOOSTED = "https://discord.com/api/webhooks/1543707587617226782/86m7vT9fktckDHFumeoxRmIkLLdAG3cUmmzZ4Gtp4dvR55zJKD9HXX6kq91lIgSElYgZ",
+    NUKE = "https://discord.com/api/webhooks/1543707672304554055/hSQK_b2OS0z9sXeX0gsVnewkcHrXgrr7zZ51oPlomgGsUOnAJQC_iQVvzMN1_uSdUfjS",
+    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1543707474568413264/EE7BJOIOYdu09gXyfJie6VVvQdSGM6XkqPLO-YnBSHkRF9or4bV8P9ErZK3Jjvx_3ij1",
     AUTO_BUY = "https://discord.com/api/webhooks/1547233702981935195/k4a4Gr7Xa_M2WE3n5-sIbwtjMzWEcR7uYGf0R9YM-fiuDoIoxm-Cu_2klo27mABt75Bm"  -- <-- tambahin ini
 }
 
@@ -658,12 +659,6 @@ local BOOSTED_ITEMS = {
     ["Blazing Azure Talon"] = true,
 }
 
-local BOOSTED_TYPE_EXCLUSIONS = {
-    Gravelight = {
-        Sword = true,
-    },
-}
-
 --==================================================
 -- MANUAL NUKE LIST
 --==================================================
@@ -991,10 +986,20 @@ local function getSalesHistory(itemType, itemKey)
     return result
 end
 
+-- Tracking item yang sering gagal
+local failedItemTracker = {}
+local FAILED_ITEM_LIMIT = 5  -- kalau gagal 5x, skip item itu selamanya (sampai script restart)
+
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
     if not AUTO_BUY_ENABLED then return false end
     if price > maxPrice then
         print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
+        return false
+    end
+
+    -- Skip item yang sering gagal
+    if failedItemTracker[itemName] and failedItemTracker[itemName] >= FAILED_ITEM_LIMIT then
+        print("[AUTO-BUY] Skip item (sering gagal):", itemName)
         return false
     end
 
@@ -1004,22 +1009,25 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
 
     print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", ownerArg, "listingId:", listingId)
 
-    for attempt = 1, 3 do
+    for attempt = 1, 5 do  -- <-- naik dari 3 jadi 5
         local success, result = pcall(function()
             return BoothController:PurchaseListing(ownerArg, listingId)
         end)
 
+        local isSuccessful = false
+
         if success then
-            -- Cek apakah result menunjukkan sukses
-            -- Beberapa game return true/false, atau return { Success = true }
-            local isSuccessful = false
+            -- Cek berbagai bentuk return value
             if typeof(result) == "boolean" then
                 isSuccessful = result
-            elseif typeof(result) == "table" and result.Success == true then
-                isSuccessful = true
-            elseif typeof(result) == "table" and result.success == true then
-                isSuccessful = true
-            elseif typeof(result) == "table" and result == true then
+            elseif typeof(result) == "table" then
+                if result.Success == true or result.success == true or result.Ok == true or result.ok == true then
+                    isSuccessful = true
+                end
+            elseif result == nil then
+                -- Kadang fungsi return nil saat sukses (fire and forget)
+                -- Kita asumsikan sukses, biar webhook tetap dikirim
+                -- Tapi kita tetap cek apakah listing masih ada
                 isSuccessful = true
             end
 
@@ -1027,18 +1035,25 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
                 print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
                 return true
             else
-                warn("[AUTO-BUY] ❌ Gagal (server reject):", itemName, tostring(result))
-                if attempt < 3 then
-                    task.wait(0.5 * attempt)
+                warn("[AUTO-BUY] ❌ Gagal (server reject) attempt "..attempt.." :", itemName, "| result:", tostring(result))
+
+                -- Kalau gagal di attempt 1-2, coba lagi dengan delay lebih panjang
+                if attempt < 5 then
+                    task.wait(0.7 * attempt)  -- delay makin panjang
                 end
             end
         else
-            warn("[AUTO-BUY] ❌ Gagal (error):", itemName, tostring(result))
-            if attempt < 3 then
+            warn("[AUTO-BUY] ❌ Gagal (error) attempt "..attempt.." :", itemName, tostring(result))
+            if attempt < 5 then
                 task.wait(0.5 * attempt)
             end
         end
     end
+
+    -- Kalau gagal total, catat
+    failedItemTracker[itemName] = (failedItemTracker[itemName] or 0) + 1
+    print("[AUTO-BUY] Failed count untuk", itemName, ":", failedItemTracker[itemName])
+
     return false
 end
 
@@ -2102,22 +2117,10 @@ local function isBoosted(itemType, itemName)
         return false
     end
 
-    local excludedTypes =
-        BOOSTED_TYPE_EXCLUSIONS[itemName]
-
-    if excludedTypes
-        and excludedTypes[itemType] then
-
-        return false
-    end
-
-    local normalizedItemName =
-        normalizeItemName(itemName)
+    local normalizedItemName = normalizeItemName(itemName)
 
     for boostedItemName in pairs(BOOSTED_ITEMS) do
-        if normalizeItemName(boostedItemName)
-            == normalizedItemName then
-
+        if normalizeItemName(boostedItemName) == normalizedItemName then
             return true
         end
     end
@@ -3596,11 +3599,13 @@ if AUTO_BUY_ENABLED then
     if shouldBuy then
     local success = attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
     if success then
-        task.spawn(function()
+        -- Kirim webhook SYNCHRONOUSLY (bukan task.spawn)
+        -- biar dijamin kekirim sebelum scan loop lanjut
+        local ok, err = pcall(function()
             sendAutoBuyWebhook(
                 result.itemName,
                 result.itemType,
-                result.itemKey,       -- <-- tambahkan
+                result.itemKey,
                 result.price,
                 result.rap,
                 result.profit,
@@ -3608,6 +3613,9 @@ if AUTO_BUY_ENABLED then
                 ownerId
             )
         end)
+        if not ok then
+            warn("[AUTO-BUY WEBHOOK] ❌ Error saat kirim:", tostring(err))
+        end
     end
 end
     end
