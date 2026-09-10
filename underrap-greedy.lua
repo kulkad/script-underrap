@@ -2369,7 +2369,7 @@ local function sendWebhook(
         })
     end
 
-    --==================================================
+        --==================================================
     -- SERVER
     --==================================================
 
@@ -2383,15 +2383,8 @@ local function sendWebhook(
     -- PROFILE
     --==================================================
 
-    -- Server link (tempat auto-buy terjadi)
-    table.insert(embed.fields, {
-        name = "Server Link",
-        value = getServerLink(),
-        inline = false,
-    })
-
     if ownerProfileUrl then
-        table.insert(embed.fields, {
+        table.insert(fields, {
             name = "Seller Profile",
             value = ownerProfileUrl,
             inline = false,
@@ -2584,6 +2577,13 @@ local function sendAutoBuyWebhook(itemName, itemType, itemKey, price, rap, profi
         },
         timestamp = DateTime.now():ToIsoDate(),
     }
+
+        -- Server Link (tempat auto-buy terjadi)
+    table.insert(embed.fields, {
+        name = "Server Link",
+        value = getServerLink(),
+        inline = false,
+    })
 
     if ownerProfileUrl then
         table.insert(embed.fields, {
