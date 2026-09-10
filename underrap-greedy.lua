@@ -2383,10 +2383,16 @@ local function sendWebhook(
     -- PROFILE
     --==================================================
 
-    if ownerProfileUrl then
+    -- Server link (tempat auto-buy terjadi)
+    table.insert(embed.fields, {
+        name = "Server Link",
+        value = getServerLink(),
+        inline = false,
+    })
 
-        table.insert(fields, {
-            name = "Profile",
+    if ownerProfileUrl then
+        table.insert(embed.fields, {
+            name = "Seller Profile",
             value = ownerProfileUrl,
             inline = false,
         })
