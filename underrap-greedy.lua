@@ -40,7 +40,7 @@ local SAFE_HOP_COOLDOWN_SECONDS = 35
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local STARTUP_DELAY_SECONDS = math.random(5, 10)
+local STARTUP_DELAY_SECONDS = math.random(7, 12)
 local WEBHOOK_DELAY_SECONDS = 2
 local BOOTH_LOAD_DELAY_SECONDS = 5
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
@@ -76,35 +76,32 @@ local AUTO_BUY_LIST = {
     ["Pulseheart Set"] = 4000,
     ["Cosmic Wrath"] = 34000,
     ["Lily Katana"] = 4200,
-    ["Diamond Starblade"] = 4000,
     ["Snowball Launcher"] = 3400,
     ["Floppy Chicken"] = 3400,
-    ["Moonflower Greatsword"] = 3300,
+    ["Moonflower Greatsword"] = 3000,
+    ["Strawberry Cake Blade"] = 290,
     ["Starwand"] = 3200,
-    ["Evil Cyborg Blade"] = 750,
+    ["Red Moon Katana"] = 3000,
     ["Gravelight"] = 4500,
-    ["Hellfire King"] = 3200,
+    ["Hellfire King"] = 3100,
     ["Hollow Oath Katana"] = 3200,
     ["Black Oni katana"] = 3200,
     ["Eternal Scythe"] = 2000,
-    ["Enchanted Bluerose"] = 2100,
-    ["Sunset Pastelblade"] = 2100,
-    ["Glacialis Requiem"] = 1400,
+    ["Enchanted Bluerose"] = 2000,
+    ["Sunset Pastelblade"] = 2000,
+    ["Glacialis Requiem"] = 1200,
     ["Crystal Blade"] = 1400,
     ["Black Ninja Star"] = 1700,
-    ["Riftspike Reaper"] = 1300,
+    ["Riftspike Reaper"] = 1100,
     ["Oceanic Reaper"] = 1500,
     ["All-Star Striker"] = 1000,
     ["Coffin"] = 9000,
     ["Y2K Blade"] = 600,
-    ["Ban Hammer"] = 9400,
-    ["Wolf Greatsword"] = 15000,
+    ["Wolf Greatsword"] = 14200,
     ["Sea Turtle"] = 12500,
     ["North Blade"] = 1400,
     ["Dual Chroma set"] = 11500,
-    ["Spinalis"] = 10000,
-    ["Viral Piercer"] = 7000,
-    ["Chroma Scythe"] = 7500,
+    ["Chroma Scythe"] = 7000,
     ["The Curse"] = 4400,
     ["Dual Yinyang Greatsword"] = 4500,
     ["Prismatic Odachi"] = 3000,
@@ -130,7 +127,7 @@ local AUTO_BUY_LIST = {
     ["Pink Oni Katana"] = 2900,
     ["Purple Oni Katana"] = 2900,
     ["Dual Wonderwisp Greatsword"] = 3000,
-    ["Pearl Angel Katana"] = 3400,
+    ["Pearl Angel Katana"] = 3200,
     ["Dual Eternal Greatsword"] = 3200,
     ["Chroma Ninja Star"] = 3200,
     ["Astral Seraph Blade"] = 3200,
@@ -148,7 +145,7 @@ local AUTO_BUY_LIST = {
     ["Green Ninja Katana"] = 4800,
     ["Red Ninja Katana"] = 5700,
     ["Blue Ninja katana"] = 5900,
-    ["Void Blade"] = 1700,
+    ["Void Blade"] = 1600,
     ["Abyssal Blade"] = 1300,
     ["Cloud"] = 22000,
     ["Crystal Greatblade"] = 1700,
@@ -156,11 +153,11 @@ local AUTO_BUY_LIST = {
     ["Neo-Neko Katana"] = 490,
     ["Witch's Curse"] = 3000,
     ["Wind Thorn"] = 1000,
-    ["Jackolantern"] = 16000,          -- ambil harga termurah (16000)
+    ["Jackolantern"] = 16500,          -- ambil harga termurah (16000)
     ["Eternal Piercer"] = 28000,
-    ["Valentine Hearts"] = 8700,       -- Emote
+    ["Valentine Hearts"] = 8500,       -- Emote
     ["Rose Gift"] = 9500,              -- Emote
-    ["Love For You"] = 12500,          -- Emote
+    ["Love For You"] = 13100,          -- Emote
     ["Chroma Blade"] = 13700,          -- ambil harga termurah (13700)
     ["King Blade"] = 12000,
     ["Puppy"] = 16000,                 -- ambil harga termurah (16000)
@@ -169,12 +166,12 @@ local AUTO_BUY_LIST = {
     ["Royal Duality"] = 45000,
     ["Holy Blade"] = 2000,
     ["Higanbana Katana"] = 3900,
-    ["Moonflower Katana"] = 18000,     -- ambil harga termurah (18000)
+    ["Moonflower Katana"] = 17000,     -- ambil harga termurah (18000)
     ["Evil Deal"] = 3000,
     ["Kitty Rocket"] = 9000,
     ["Cat Paw"] = 11000,
     ["Brutality Affection Bat"] = 7200,
-    ["Borealis"] = 26500,              -- ambil harga termurah (26500)
+    ["Borealis"] = 26700,              -- ambil harga termurah (26500)
     ["Celestial Whisper"] = 22000,
     ["Reindeer"] = 32000,
     ["Siam Ember Axe"] = 98000,
@@ -198,14 +195,22 @@ local AUTO_BUY_LIST = {
     ["Phantom Chase"] = 62,            -- Emote
     -- ===== ITEM BARU =====
     ["Wicked Crow"] = 9000,
+    ["Hug"] = 15000,
     ["Black Ninja Katana"] = 9000,
     ["Loving Backblade"] = 9000,
     ["T-Rex"] = 11500,
+    ["Jolly Scythe Set"] = 1750,
     ["Kitty Launcher"] = 17500,
     ["Fallen Angel"] = 21000,
     ["Chroma Ninja Katana"] = 24500,
     ["Chroma Seal"] = 31000,
     ["Seraphim"] = 42000,
+    ["Montagem Miau"] = 7000,
+    ["Legs Kickin'"] = 7800,  
+    ["Winter Wolf"] = 19500,
+    ["Night Raver"] = 8300,
+    ["Dual Leviathan Set"] = 3900,
+    ["Cupid's Bow"] = 420,
 }
 
 --==================================================
@@ -216,8 +221,8 @@ local SALES_HISTORY_DAYS = 6
 local MIN_SALES_COUNT = 20
 
 -- Syarat auto-buy untuk under-100 dan under-50%
-local AUTO_BUY_MIN_DAYS_WITH_SALES = 3          -- minimal berapa hari yang mencapai target
-local AUTO_BUY_MIN_DAILY_SALES = 50             -- target penjualan per hari
+local AUTO_BUY_MIN_DAYS_WITH_SALES = 2          -- minimal berapa hari yang mencapai target
+local AUTO_BUY_MIN_DAILY_SALES = 30             -- target penjualan per hari
 -- Dynamic boosted detection (untuk deteksi item yang RAP-nya dimanipulasi)
 local DYNAMIC_BOOSTED_ENABLED = true
 local DYNAMIC_BOOSTED_RAP_RATIO = 1.5          -- RAP sekarang > rata-rata * rasio ini
@@ -261,7 +266,6 @@ local BOOSTED_ITEMS = {
     ["Dawnpiercer"] = true,
     ["Ocean Surfer"] = true,
     ["Knighthood"] = true,
-    ["Hug"] = true,
     ["Royal Throne"] = true,
     ["Gravebone Scythe"] = true,
     ["Loving Backblade"] = true,
@@ -1006,10 +1010,30 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
         end)
 
         if success then
-            print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-            return true
+            -- Cek apakah result menunjukkan sukses
+            -- Beberapa game return true/false, atau return { Success = true }
+            local isSuccessful = false
+            if typeof(result) == "boolean" then
+                isSuccessful = result
+            elseif typeof(result) == "table" and result.Success == true then
+                isSuccessful = true
+            elseif typeof(result) == "table" and result.success == true then
+                isSuccessful = true
+            elseif typeof(result) == "table" and result == true then
+                isSuccessful = true
+            end
+
+            if isSuccessful then
+                print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+                return true
+            else
+                warn("[AUTO-BUY] ❌ Gagal (server reject):", itemName, tostring(result))
+                if attempt < 3 then
+                    task.wait(0.5 * attempt)
+                end
+            end
         else
-            warn("[AUTO-BUY] ❌ Gagal (percobaan "..attempt.."):", tostring(result))
+            warn("[AUTO-BUY] ❌ Gagal (error):", itemName, tostring(result))
             if attempt < 3 then
                 task.wait(0.5 * attempt)
             end
@@ -3547,7 +3571,7 @@ if AUTO_BUY_ENABLED then
             shouldBuy = (result.price <= maxPrice)
         else
             -- 2. Kondisi under 100 (RAP < 1000 dan price <= RAP - 100)
-            if result.rap < 1000 and (result.rap - result.price) >= 100 then
+            if result.rap < 1500 and (result.rap - result.price) >= 100 then
                 if result.salesHistory and result.salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES then
                     shouldBuy = true
                     maxPrice = result.price
