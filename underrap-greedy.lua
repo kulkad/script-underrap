@@ -35,17 +35,16 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 20
-local SAFE_HOP_COOLDOWN_SECONDS = 35
+local SAFE_SCAN_COOLDOWN_SECONDS = 30
+local SAFE_HOP_COOLDOWN_SECONDS = 20
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local STARTUP_DELAY_SECONDS = math.random(7, 12)
-local WEBHOOK_DELAY_SECONDS = 2
-local BOOTH_LOAD_DELAY_SECONDS = 5
+local WEBHOOK_DELAY_SECONDS = 1
+local BOOTH_LOAD_DELAY_SECONDS = 2
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
-local SERVER_HOP_DELAY_SECONDS = 10
+local SERVER_HOP_DELAY_SECONDS = 5
 local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
@@ -82,6 +81,7 @@ local AUTO_BUY_LIST = {
     ["Moonflower Greatsword"] = 3000,
     ["Strawberry Cake Blade"] = 290,
     ["Starwand"] = 3200,
+    ["Meowstruck"] = 1300,
     ["Red Moon Katana"] = 3000,
     ["Gravelight"] = 4500,
     ["Hellfire King"] = 3100,
@@ -97,6 +97,8 @@ local AUTO_BUY_LIST = {
     ["Oceanic Reaper"] = 1500,
     ["All-Star Striker"] = 1000,
     ["Coffin"] = 9000,
+    ["Skeleton Bride"] = 6000,
+    ["Black Cat Scythe"] = 790,
     ["Y2K Blade"] = 600,
     ["Wolf Greatsword"] = 14200,
     ["Sea Turtle"] = 12500,
@@ -152,13 +154,13 @@ local AUTO_BUY_LIST = {
     ["Crystal Greatblade"] = 1700,
     ["Kitty Katana"] = 12500,
     ["Neo-Neko Katana"] = 490,
-    ["Witch's Curse"] = 3000,
+    ["Witch's Curse"] = 2900,
     ["Wind Thorn"] = 800,
     ["Jackolantern"] = 16500,          -- ambil harga termurah (16000)
     ["Eternal Piercer"] = 28000,
     ["Valentine Hearts"] = 8500,       -- Emote
     ["Rose Gift"] = 9500,              -- Emote
-    ["Love For You"] = 13100,          -- Emote
+    ["Love For You"] = 13000,          -- Emote
     ["Chroma Blade"] = 13700,          -- ambil harga termurah (13700)
     ["King Blade"] = 12000,
     ["Puppy"] = 16000,                 -- ambil harga termurah (16000)
@@ -167,7 +169,7 @@ local AUTO_BUY_LIST = {
     ["Royal Duality"] = 45000,
     ["Holy Blade"] = 2000,
     ["Higanbana Katana"] = 3900,
-    ["Moonflower Katana"] = 17000,     -- ambil harga termurah (18000)
+    ["Moonflower Katana"] = 17500,     -- ambil harga termurah (18000)
     ["Evil Deal"] = 3000,
     ["Kitty Rocket"] = 9000,
     ["Cat Paw"] = 11000,
@@ -175,6 +177,7 @@ local AUTO_BUY_LIST = {
     ["Borealis"] = 26700,              -- ambil harga termurah (26500)
     ["Celestial Whisper"] = 22000,
     ["Reindeer"] = 32000,
+    ["The Conjurer"] = 1500,
     ["Siam Ember Axe"] = 98000,
     ["Zombie Slide"] = 100000,         -- Emote
     ["Prince Blade"] = 2550,
@@ -182,7 +185,7 @@ local AUTO_BUY_LIST = {
     ["Aligned Constellation"] = 4100,
     ["Dancinha"] = 3000,               -- Emote
     ["Riftflare Katana"] = 3000,
-    ["Fox Katana"] = 5500,
+    ["Fox Katana"] = 5800,
     ["Milk & Cookies"] = 3000,         -- Emote
     ["Kraken"] = 6900,
     ["Sakura's Requiem"] = 3900,
@@ -211,7 +214,22 @@ local AUTO_BUY_LIST = {
     ["Winter Wolf"] = 19500,
     ["Night Raver"] = 8300,
     ["Dual Leviathan Set"] = 3900,
-    ["Cupid's Bow"] = 420,
+    ["Gothic Bunny Blade"] = 260,
+    -- ===== TAMBAHAN BARU =====
+    ["Watching The Stars"] = 2800,
+    ["Rabicasada"] = 1600,
+    ["Bring it Arround"] = 1700,
+    ["Jackpot"] = 3600,
+    ["King Throne"] = 3000,
+    ["Devil Greatsword Emote"] = 3000,
+    ["Popular"] = 1300,
+    ["Kitty Launcher Emote"] = 2300,
+    ["Crab Rave"] = 2200,
+    ["Luna Bala"] = 1900,
+    ["Floating Sword"] = 2100,
+    ["Orbital [NEBULA YORU]"] = 1500,
+    ["Chroma Scythe Emote"] = 1400,
+    ["Coffin Emote"] = 1300,
 }
 
 --==================================================
@@ -234,7 +252,7 @@ local DYNAMIC_BOOSTED_MIN_TOTAL_SALES = 30     -- total sales di bawah ini diang
 --==================================================
 
 local WEBHOOKS = {
-        LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
+    LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
     MID = "https://discord.com/api/webhooks/1543706710244589698/_THA47t4vJdnPYY23W5yFto012XfGIi7ULE23UAvr64ZIs7r6AG2cqu-FRLw3u36oo8x",
     HIGH = "https://discord.com/api/webhooks/1543707373900660756/rNWk0OGFmxHNUStM4RN43nSMegf5xeNNFvFkGMwrub2SP7C05WzzcmwiVL_TkDQ0AGo2",
     ["100K+"] = "https://discord.com/api/webhooks/1543707100637564999/3yeKaYamEkuKSrdSjTRVhOf_SSRZ_Dag3rCQBgjJLYzwILCnLZLo8_RiOqxNoBo9z8bA",
@@ -282,6 +300,7 @@ local BOOSTED_ITEMS = {
     ["Crystal Ribbon Blade"] = true,
     ["Dual Stellar Revolver"] = true,
     ["FROSTWALL"] = true,
+    ["Wind Thorn"] = true,
     ["Inferno Lance"] = true,
     ["Inferno Katana"] = true,
     ["Water Slasher"] = true,
@@ -316,6 +335,7 @@ local BOOSTED_ITEMS = {
     ["Zeus' Lightning"] = true,
     ["Dual Lucky Fan"] = true,
     ["Neo-Neko Katana"] = true,
+    ["Neo-Neko Needle"] = true,
     ["Samurai's Set"] = true,
     ["Wispwind Reaper"] = true,
     ["Hero of Hope Saber"] = true,
@@ -427,6 +447,9 @@ local BOOSTED_ITEMS = {
     ["Wreath Shot"] = true,
     ["Zeus' Revenge"] = true,
     ["2025"] = true,
+    ["Black Oni Katana"] = true,
+    ["Evil Cyborg Blade"] = true,
+    ["Strawberry Cake Lance"] = true,
     ["Umbra Spear"] = true,
     ["Event Horizon"] = true,
     ["Awakened Venomweaver"] = true,
@@ -485,6 +508,7 @@ local BOOSTED_ITEMS = {
     ["Celestial Staff"] = true,
     ["Champion's Excalibur"] = true,
     ["Chroma DJ"] = true,
+    ["Nebula Scythe"] = true,
     ["Chroma DJ Emote"] = true,
     ["Chrome Dracula Blade"] = true,
     ["Clockwork Blueblade"] = true,
@@ -769,29 +793,86 @@ local function canDoScan()
 end
 
 --==================================================
+-- SAFE REQUIRE (retry kalau module belum siap)
+--==================================================
+
+local function safeRequire(module, label, maxAttempts)
+    maxAttempts = maxAttempts or 10
+
+    for attempt = 1, maxAttempts do
+        local success, result = pcall(function()
+            return require(module)
+        end)
+
+        if success and result then
+            print("[Scanner] ✅ Module loaded:", label or "unknown")
+            return result
+        end
+
+        warn(
+            "[Scanner] ⚠️ Gagal require " .. tostring(label)
+            .. " (attempt " .. attempt .. "/" .. maxAttempts .. "): "
+            .. tostring(result)
+        )
+
+        if attempt < maxAttempts then
+            task.wait(2)  -- tunggu 2 detik sebelum retry
+        end
+    end
+
+    warn("[Scanner] ❌ Gagal load module:", label)
+    return nil
+end
+
+--==================================================
 -- GET CONTROLLERS
 --==================================================
 
 local Controllers =
-    ReplicatedStorage:WaitForChild("Controllers")
+    ReplicatedStorage:WaitForChild("Controllers", 30)
 
 local Trading =
-    Controllers:WaitForChild("Trading")
+    Controllers:WaitForChild("Trading", 30)
 
-local BoothController =
-    require(Controllers.Booth.BoothController)
+local BoothControllerModule =
+    Controllers.Booth:WaitForChild("BoothController", 30)
 
-local RAPController =
-    require(Trading.RAPController)
+local RAPControllerModule =
+    Trading:WaitForChild("RAPController", 30)
+
+if not BoothControllerModule or not RAPControllerModule then
+    warn("[Scanner] ❌ Module controller tidak ditemukan. Tunggu 5 detik lalu coba lagi...")
+    task.wait(5)
+    if not BoothControllerModule then
+        BoothControllerModule = Controllers.Booth:WaitForChild("BoothController", 30)
+    end
+    if not RAPControllerModule then
+        RAPControllerModule = Trading:WaitForChild("RAPController", 30)
+    end
+end
+
+local BoothController = safeRequire(BoothControllerModule, "BoothController")
+local RAPController = safeRequire(RAPControllerModule, "RAPController")
+
+if not BoothController or not RAPController then
+    warn("[Scanner] ❌ Gagal load controller. Stop script.")
+    return
+end
 
 --==================================================
 -- REPLICATED INSTANCES
 --==================================================
 
+local ReplicatedInstancesModule =
+    ReplicatedStorage.Shared:WaitForChild("ReplicatedInstances", 30)
+
 local ReplicatedInstances =
-    require(
-        ReplicatedStorage.Shared.ReplicatedInstances
-    )
+    safeRequire(ReplicatedInstancesModule, "ReplicatedInstances")
+
+if not ReplicatedInstances then
+    warn("[Scanner] ❌ Gagal load ReplicatedInstances. Stop script.")
+    return
+end
 
 --==================================================
 -- EMOTE DATABASE
@@ -821,8 +902,19 @@ print("[Scanner] BoothListings ditemukan:", BoothListings)
 -- SALES HISTORY & AUTO-BUY (TAMBAHAN)
 --==================================================
 
-local Net = require(ReplicatedStorage.Packages.Net)
-local RAPHistoryRequest = Net:RemoteFunction("RequestRAPHistory")
+local NetModule =
+    ReplicatedStorage.Packages:WaitForChild("Net", 30)
+
+local Net =
+    safeRequire(NetModule, "Net")
+
+if not Net then
+    warn("[Scanner] ❌ Gagal load Net. Stop script.")
+    return
+end
+
+local RAPHistoryRequest =
+    Net:RemoteFunction("RequestRAPHistory")
 
 local SalesHistoryCache = {}
 
@@ -3837,6 +3929,4 @@ end
 -- RUN
 --==================================================
 
-print("[Scanner] Menunggu " .. STARTUP_DELAY_SECONDS .. " detik sebelum memulai scan...")
-task.wait(STARTUP_DELAY_SECONDS)
 scan()
