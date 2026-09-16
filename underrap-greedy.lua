@@ -35,6 +35,7 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
+local STARTUP_DELAY_SECONDS = math.random(5, 7)
 local SAFE_SCAN_COOLDOWN_SECONDS = 30
 local SAFE_HOP_COOLDOWN_SECONDS = 20
 local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
@@ -75,18 +76,20 @@ local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
 local AUTO_BUY_LIST = {
     ["Pulseheart Set"] = 4000,
     ["Cosmic Wrath"] = 34000,
-    ["Lily Katana"] = 4200,
+    ["Lily Katana"] = 4000,
     ["Snowball Launcher"] = 3400,
     ["Floppy Chicken"] = 3400,
+    ["Sitting"] = 2300,
     ["Moonflower Greatsword"] = 3000,
     ["Strawberry Cake Blade"] = 290,
-    ["Starwand"] = 3200,
+    ["Star Wand"] = 3200,
+    ["Queen Blade"] = 27500,
     ["Meowstruck"] = 1300,
     ["Red Moon Katana"] = 3000,
     ["Gravelight"] = 4500,
     ["Hellfire King"] = 3100,
     ["Hollow Oath Katana"] = 3200,
-    ["Black Oni katana"] = 3200,
+    ["Black Oni Katana"] = 3200,
     ["Eternal Scythe"] = 2000,
     ["Enchanted Bluerose"] = 2000,
     ["Sunset Pastelblade"] = 2000,
@@ -133,12 +136,12 @@ local AUTO_BUY_LIST = {
     ["Pearl Angel Katana"] = 3200,
     ["Dual Eternal Greatsword"] = 3200,
     ["Chroma Ninja Star"] = 3200,
-    ["Astral Seraph Blade"] = 3200,
     ["Proyection Sorcery Katana"] = 3800,
     ["Blackhole Set"] = 3700,
     ["Celestial Lance"] = 3500,
     ["Hellwing Set"] = 4000,
     ["Halberd"] = 3100,
+    ["Gyaru Katana"] = 4000,
     ["Guardian of the underworld"] = 3500,
     ["Devil Greatsword"] = 3800,
     ["Frostbound Latern"] = 4000,
@@ -155,15 +158,16 @@ local AUTO_BUY_LIST = {
     ["Kitty Katana"] = 12500,
     ["Neo-Neko Katana"] = 490,
     ["Witch's Curse"] = 2900,
-    ["Wind Thorn"] = 800,
+    ["Wind Thorn"] = 500,
     ["Jackolantern"] = 16500,          -- ambil harga termurah (16000)
     ["Eternal Piercer"] = 28000,
     ["Valentine Hearts"] = 8500,       -- Emote
     ["Rose Gift"] = 9500,              -- Emote
     ["Love For You"] = 13000,          -- Emote
-    ["Chroma Blade"] = 13700,          -- ambil harga termurah (13700)
+    ["Chroma Blade"] = 14000,          -- ambil harga termurah (13700)
     ["King Blade"] = 12000,
     ["Puppy"] = 16000,                 -- ambil harga termurah (16000)
+    ["Spring Slicer"] = 900,                 -- ambil harga termurah (16000)
     ["Flaming Sword"] = 3100,
     ["Pillow"] = 2400,
     ["Royal Duality"] = 45000,
@@ -189,11 +193,11 @@ local AUTO_BUY_LIST = {
     ["Milk & Cookies"] = 3000,         -- Emote
     ["Kraken"] = 6900,
     ["Sakura's Requiem"] = 3900,
-    ["Hitman"] = 5300,
+    ["Hitman"] = 5200,
     ["Angel Greatsword"] = 3000,
     ["Bunny"] = 120000,
     ["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 28000,
+    ["Icebound Dominus"] = 30000,
     ["Regret Blades"] = 19000,
     ["Eternum Galepiercer"] = 8000,
     ["Phantom Chase"] = 62,            -- Emote
@@ -230,6 +234,7 @@ local AUTO_BUY_LIST = {
     ["Orbital [NEBULA YORU]"] = 1500,
     ["Chroma Scythe Emote"] = 1400,
     ["Coffin Emote"] = 1300,
+    ["Coffin Explosion"] = 6500,
 }
 
 --==================================================
@@ -242,9 +247,13 @@ local MIN_SALES_COUNT = 20
 -- Syarat auto-buy untuk under-100 dan under-50%
 local AUTO_BUY_MIN_DAYS_WITH_SALES = 2          -- minimal berapa hari yang mencapai target
 local AUTO_BUY_MIN_DAILY_SALES = 30             -- target penjualan per hari
+
+-- Dynamic boosted detection (untuk deteksi item yang RAP-nya dimanipulasi)
+
 -- Dynamic boosted detection (untuk deteksi item yang RAP-nya dimanipulasi)
 local DYNAMIC_BOOSTED_ENABLED = true
-local DYNAMIC_BOOSTED_RAP_RATIO = 1.5          -- RAP sekarang > rata-rata * rasio ini
+local DYNAMIC_BOOSTED_RAP_RATIO = 1.5          -- RAP > avg * rasio ini = boosted
+local DYNAMIC_BOOSTED_RAP_DIFF = 300           -- BARU: RAP - avg >= selisih ini = boosted
 local DYNAMIC_BOOSTED_MIN_TOTAL_SALES = 30     -- total sales di bawah ini dianggap mencurigakan
 
 --==================================================
@@ -300,7 +309,8 @@ local BOOSTED_ITEMS = {
     ["Crystal Ribbon Blade"] = true,
     ["Dual Stellar Revolver"] = true,
     ["FROSTWALL"] = true,
-    ["Wind Thorn"] = true,
+    ["Nightclaw Blade"] = true,
+    ["Void Scythe"] = true,
     ["Inferno Lance"] = true,
     ["Inferno Katana"] = true,
     ["Water Slasher"] = true,
@@ -331,6 +341,7 @@ local BOOSTED_ITEMS = {
     ["Elemental Masterblade"] = true,
     ["Kurogin Scythe"] = true,
     ["Heart Blade"] = true,
+    ["Nightclaw Blade"] = true,
     ["Blizzard Slayer"] = true,
     ["Zeus' Lightning"] = true,
     ["Dual Lucky Fan"] = true,
@@ -375,6 +386,7 @@ local BOOSTED_ITEMS = {
     ["Ranked Season 20 Champion"] = true,
     ["Dual Sakura Fan"] = true,
     ["Frog"] = true,
+    ["Astral Sword"] = true,
     ["Y2K Blade"] = true,
     ["Dual Aurum Etherius"] = true,
     ["Inferno Greatscythe"] = true,
@@ -695,11 +707,11 @@ local NUKE_ITEMS = {
     ["Moonflower Katana"] = 17000,
     ["Bunny"] = 120000,
     ["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 28000,
+    ["Icebound Dominus"] = 30000,
     ["Regret Blades"] = 19000,
     ["Celestial Whisper"] = 21000,
     ["Royal Duality"] = 40000,
-    ["Queen Blade"] = 27000,
+    ["Queen Blade"] = 27500,
     ["Eternum Galepiercer"] = 9400,
     ["Zombie Slide"] = 100000,
 }
@@ -1080,7 +1092,7 @@ end
 
 -- Tracking item yang sering gagal
 local failedItemTracker = {}
-local FAILED_ITEM_LIMIT = 5  -- kalau gagal 5x, skip item itu selamanya (sampai script restart)
+local FAILED_ITEM_LIMIT = 10  -- kalau gagal 5x, skip item itu selamanya (sampai script restart)
 
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
     if not AUTO_BUY_ENABLED then return false end
@@ -1101,7 +1113,7 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
 
     print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", ownerArg, "listingId:", listingId)
 
-    for attempt = 1, 5 do  -- <-- naik dari 3 jadi 5
+    for attempt = 1, 10 do  
         local success, result = pcall(function()
             return BoothController:PurchaseListing(ownerArg, listingId)
         end)
@@ -1131,13 +1143,13 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
 
                 -- Kalau gagal di attempt 1-2, coba lagi dengan delay lebih panjang
                 if attempt < 5 then
-                    task.wait(0.7 * attempt)  -- delay makin panjang
+                    task.wait(2 * attempt)  -- delay makin panjang
                 end
             end
         else
             warn("[AUTO-BUY] ❌ Gagal (error) attempt "..attempt.." :", itemName, tostring(result))
-            if attempt < 5 then
-                task.wait(0.5 * attempt)
+            if attempt < 10 then
+                task.wait(2 * attempt)
             end
         end
     end
@@ -3037,28 +3049,52 @@ local function inspectListing(
     --==================================================
     -- DYNAMIC BOOSTED DETECTION (TAMBAHAN)
     --==================================================
-    if not boosted and isUnderrap and DYNAMIC_BOOSTED_ENABLED then
+        if not boosted and isUnderrap and DYNAMIC_BOOSTED_ENABLED then
         local isDynamicBoosted = false
+        local boostReason = ""
+
         if not salesHistory then
-            -- Tidak ada data sales → item baru atau tidak laku → dianggap boosted
+            -- Tidak ada data sales → dianggap boosted
             isDynamicBoosted = true
+            boostReason = "no sales history"
         else
             local avgRap = salesHistory.averageRap
             local totalSales = salesHistory.totalSales
+
             if avgRap and totalSales then
-                -- Cek lonjakan RAP tidak wajar
+                -- Cek 1: rasio (RAP naik > 50% dari avg)
                 if rap > avgRap * DYNAMIC_BOOSTED_RAP_RATIO then
                     isDynamicBoosted = true
-                -- Atau total sales sangat rendah (item baru/manipulasi)
+                    boostReason = string.format(
+                        "ratio %.2fx (avg %d)",
+                        rap / avgRap, avgRap
+                    )
+                -- Cek 2: selisih absolut (RAP - avg >= threshold)
+                elseif (rap - avgRap) >= DYNAMIC_BOOSTED_RAP_DIFF then
+                    isDynamicBoosted = true
+                    boostReason = string.format(
+                        "diff +%d (avg %d)",
+                        rap - avgRap, avgRap
+                    )
+                -- Cek 3: total sales rendah
                 elseif totalSales < DYNAMIC_BOOSTED_MIN_TOTAL_SALES then
                     isDynamicBoosted = true
+                    boostReason = string.format(
+                        "low total sales (%d)",
+                        totalSales
+                    )
                 end
             end
         end
 
         if isDynamicBoosted then
             boosted = true
-            print("[DYNAMIC BOOSTED]", itemName, "RAP:", rap, "| AvgRap:", avgRap or "N/A", "| TotalSales:", totalSales or "N/A")
+            print(
+                "[DYNAMIC BOOSTED]",
+                itemName,
+                "| RAP:", rap,
+                "| Reason:", boostReason
+            )
         end
     end
 
@@ -3652,12 +3688,12 @@ local function scan()
 
                     detectedCount += 1
 
-                    --==================================================
+--==================================================
 -- AUTO-BUY (TAMBAHAN)
 --==================================================
 
 if AUTO_BUY_ENABLED then
-    -- SKIP ITEM BOOSTED (biar gak auto-beli item yang RAP-nya dimanipulasi)
+    -- SKIP ITEM BOOSTED
     if result.boosted then
         if DEBUG then
             print("[AUTO-BUY] Skip boosted item:", result.itemName)
@@ -3666,50 +3702,123 @@ if AUTO_BUY_ENABLED then
         local shouldBuy = false
         local maxPrice = nil
 
-        -- 1. PRIORITAS: cek apakah item ada di AUTO_BUY_LIST
+        -- ============================================
+        -- 1. LOOKUP AUTO_BUY_LIST (CASE-INSENSITIVE)
+        -- ============================================
+        local autoBuyMaxPrice = nil
         if AUTO_BUY_LIST[result.itemName] then
-            maxPrice = AUTO_BUY_LIST[result.itemName]
-            shouldBuy = (result.price <= maxPrice)
+            autoBuyMaxPrice = AUTO_BUY_LIST[result.itemName]
         else
-            -- 2. Kondisi under 100 (RAP < 1000 dan price <= RAP - 100)
-            if result.rap < 1500 and (result.rap - result.price) >= 100 then
-                if result.salesHistory and result.salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES then
+            -- Coba lookup tanpa peduli besar-kecil huruf
+            local normalized = normalizeItemName(result.itemName)
+            for k, v in pairs(AUTO_BUY_LIST) do
+                if normalizeItemName(k) == normalized then
+                    autoBuyMaxPrice = v
+                    break
+                end
+            end
+        end
+
+        if autoBuyMaxPrice then
+            -- PRIORITAS: item ada di AUTO_BUY_LIST
+            -- → WAJIB ikuti batas harga dari list
+            -- → JANGAN jatuh ke rule 50% meski diskonnya besar
+            maxPrice = autoBuyMaxPrice
+            shouldBuy = (result.price <= maxPrice)
+
+            if DEBUG then
+                print(
+                    "[AUTO-BUY] Item di list:",
+                    result.itemName,
+                    "| Harga:", result.price,
+                    "| Max list:", maxPrice,
+                    "| Beli:", shouldBuy
+                )
+            end
+        else
+            -- ============================================
+            -- 2. FALLBACK RULE (untuk item yang TIDAK di list)
+            -- ============================================
+
+            local salesHistory = result.salesHistory
+            local hasValidSales = salesHistory
+                and salesHistory.daysAboveThreshold
+                and salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES
+
+                    local avgRap = salesHistory and salesHistory.averageRap or nil
+
+        -- Hanya skip kalau RAP JAUH di atas avg (sama seperti dynamic boosted threshold)
+        local rapFarAboveAvg = false
+        if avgRap then
+            if result.rap > avgRap * DYNAMIC_BOOSTED_RAP_RATIO then
+                rapFarAboveAvg = true
+            elseif (result.rap - avgRap) >= DYNAMIC_BOOSTED_RAP_DIFF then
+                rapFarAboveAvg = true
+            end
+        end
+
+        -- Kalau RAP jauh di atas rata-rata → skip
+        if rapFarAboveAvg then
+            if DEBUG then
+                print(
+                    "[AUTO-BUY] Skip (RAP jauh > avg):",
+                    result.itemName,
+                    "| RAP:", result.rap,
+                    "| Avg:", avgRap,
+                    "| Ratio:", result.rap / avgRap,
+                    "| Diff:", result.rap - avgRap
+                )
+            end
+        elseif hasValidSales then
+                -- Rule A: under 100 (RAP < 1500 dan selisih >= 100)
+                if result.rap < 1200 and (result.rap - result.price) >= 100 then
                     shouldBuy = true
                     maxPrice = result.price
                 end
-            end
 
-            -- 3. Kondisi under 50% (price <= 0.5 * RAP)
-            if not shouldBuy and result.price <= result.rap * 0.5 then
-                if result.salesHistory and result.salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES then
+                -- Rule B: under 50%
+                -- SYARAT TAMBAHAN:
+                --   - RAP <= 10000 (di atas itu jangan lewat rule 50%)
+                --   - RAP tidak di atas avg (sudah dicek di atas)
+                if not shouldBuy
+                    and result.rap <= 10000
+                    and result.price <= result.rap * 0.5
+                then
                     shouldBuy = true
                     maxPrice = result.price
                 end
             end
         end
 
-    if shouldBuy then
-    local success = attemptPurchase(ownerId, listingId, result.itemName, result.price, maxPrice)
-    if success then
-        -- Kirim webhook SYNCHRONOUSLY (bukan task.spawn)
-        -- biar dijamin kekirim sebelum scan loop lanjut
-        local ok, err = pcall(function()
-            sendAutoBuyWebhook(
+        -- ============================================
+        -- EKSEKUSI PEMBELIAN
+        -- ============================================
+        if shouldBuy then
+            local success = attemptPurchase(
+                ownerId,
+                listingId,
                 result.itemName,
-                result.itemType,
-                result.itemKey,
                 result.price,
-                result.rap,
-                result.profit,
-                result.discount,
-                ownerId
+                maxPrice
             )
-        end)
-        if not ok then
-            warn("[AUTO-BUY WEBHOOK] ❌ Error saat kirim:", tostring(err))
+            if success then
+                local ok, err = pcall(function()
+                    sendAutoBuyWebhook(
+                        result.itemName,
+                        result.itemType,
+                        result.itemKey,
+                        result.price,
+                        result.rap,
+                        result.profit,
+                        result.discount,
+                        ownerId
+                    )
+                end)
+                if not ok then
+                    warn("[AUTO-BUY WEBHOOK] ❌ Error:", tostring(err))
+                end
+            end
         end
-    end
-end
     end
 end
 
@@ -3929,4 +4038,6 @@ end
 -- RUN
 --==================================================
 
+scan()print("[Scanner] Menunggu " .. STARTUP_DELAY_SECONDS .. " detik sebelum memulai scan...")
+task.wait(STARTUP_DELAY_SECONDS)
 scan()
