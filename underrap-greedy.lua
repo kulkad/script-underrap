@@ -30,6 +30,9 @@ local UNDERRAP_THRESHOLDS = {
 }
 
 local DEEP_UNDERRAP_PERCENT = 50
+-- Rule tambahan untuk sword RAP kecil
+local LOW_RAP_THRESHOLD = 750        -- RAP < 700
+local LOW_RAP_MIN_DIFF = 70          -- selisih minimal 60 RAP (ubah ke 70 kalau mau)
 
 local DEBUG = false
 local DUMP_RAW_DATA = false
@@ -85,7 +88,7 @@ local AUTO_BUY_LIST = {
     ["Star Wand"] = 3200,
     ["Queen Blade"] = 27500,
     ["Meowstruck"] = 1300,
-    ["Red Moon Katana"] = 3000,
+    ["Red Moon Katana"] = 2900,
     ["Gravelight"] = 4500,
     ["Hellfire King"] = 3100,
     ["Hollow Oath Katana"] = 3200,
@@ -107,7 +110,7 @@ local AUTO_BUY_LIST = {
     ["Sea Turtle"] = 12500,
     ["North Blade"] = 1400,
     ["Dual Chroma set"] = 11500,
-    ["Chroma Scythe"] = 7000,
+    ["Chroma Scythe"] = 7200,
     ["The Curse"] = 4400,
     ["Dual Yinyang Greatsword"] = 4500,
     ["Prismatic Odachi"] = 3000,
@@ -120,6 +123,7 @@ local AUTO_BUY_LIST = {
     ["Amethyst Backblade"] = 2000,
     ["Etheral Bombardment"] = 2000,
     ["Nebula Sniper"] = 2000,
+    ["Soulrender Scythe"] = 2300,
     ["Blackhole Sword"] = 1900,
     ["Candycane Sniper"] = 1800,
     ["Draconic Greatsword"] = 1700,
@@ -157,12 +161,12 @@ local AUTO_BUY_LIST = {
     ["Crystal Greatblade"] = 1700,
     ["Kitty Katana"] = 12500,
     ["Neo-Neko Katana"] = 490,
-    ["Witch's Curse"] = 2900,
+    ["Witch's Curse"] = 2800,
     ["Wind Thorn"] = 500,
     ["Jackolantern"] = 16500,          -- ambil harga termurah (16000)
     ["Eternal Piercer"] = 28000,
     ["Valentine Hearts"] = 8500,       -- Emote
-    ["Rose Gift"] = 9500,              -- Emote
+    ["Tiger's Katana"] = 11500,              -- Emote
     ["Love For You"] = 13000,          -- Emote
     ["Chroma Blade"] = 14000,          -- ambil harga termurah (13700)
     ["King Blade"] = 12000,
@@ -209,7 +213,7 @@ local AUTO_BUY_LIST = {
     ["T-Rex"] = 11500,
     ["Jolly Scythe Set"] = 1750,
     ["Kitty Launcher"] = 17500,
-    ["Fallen Angel"] = 21000,
+    ["Fallen Angel"] = 22000,
     ["Chroma Ninja Katana"] = 24500,
     ["Chroma Seal"] = 31000,
     ["Seraphim"] = 42000,
@@ -283,6 +287,9 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Tidewither"] = true,
+    ["Astral Sword"] = true,
+    ["Singularity Scythe"] = true,
+    ["Nightclaw Blade"] = true,
     ["Lumina Bow"] = true,
     ["Awakened Subversion"] = true,
     ["Gleaming Katana"] = true,
@@ -309,6 +316,7 @@ local BOOSTED_ITEMS = {
     ["Crystal Ribbon Blade"] = true,
     ["Dual Stellar Revolver"] = true,
     ["FROSTWALL"] = true,
+    ["Crystal Hammer"] = true,
     ["Nightclaw Blade"] = true,
     ["Void Scythe"] = true,
     ["Inferno Lance"] = true,
@@ -3771,7 +3779,7 @@ if AUTO_BUY_ENABLED then
             end
         elseif hasValidSales then
                 -- Rule A: under 100 (RAP < 1500 dan selisih >= 100)
-                if result.rap < 1200 and (result.rap - result.price) >= 100 then
+                if result.rap < 1300 and (result.rap - result.price) >= 100 then
                     shouldBuy = true
                     maxPrice = result.price
                 end
@@ -3787,6 +3795,28 @@ if AUTO_BUY_ENABLED then
                     shouldBuy = true
                     maxPrice = result.price
                 end
+
+                -- ============================================
+                -- Rule C (BARU): Sword RAP < 700, selisih >= 60 RAP
+                -- ============================================
+                if not shouldBuy
+                    and result.rap < LOW_RAP_THRESHOLD
+                    and (result.rap - result.price) >= LOW_RAP_MIN_DIFF
+                then
+                    shouldBuy = true
+                    maxPrice = result.price
+
+                    if DEBUG then
+                        print(
+                            "[AUTO-BUY] Rule C match:",
+                            result.itemName,
+                            "| RAP:", result.rap,
+                            "| Harga:", result.price,
+                            "| Selisih:", result.rap - result.price
+                        )
+                    end
+                end
+
             end
         end
 
