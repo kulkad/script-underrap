@@ -1,3 +1,36 @@
+do
+    local realWarn = warn
+    local realPrint = print
+    local blocked = {
+        "API HTTP error",
+        "Semua server udah dikunjungi",
+        "Mencari server lagi",
+        "Tidak menemukan server baru",
+        "Rate-limited",
+    }
+
+    local function shouldBlock(msg)
+        local m = tostring(msg or "")
+        for idx = 1, #blocked do
+            if string.find(m, blocked[idx], 1, true) then
+                return true
+            end
+        end
+        return false
+    end
+
+    warn = function(...)
+        if shouldBlock(select(1, ...)) then return end
+        realWarn(...)
+    end
+
+    print = function(...)
+        if shouldBlock(select(1, ...)) then return end
+        realPrint(...)
+    end
+end
+print("[Silent Filter] Aktif")
+
 --// Blade Ball Trade Plaza - Underrap Scanner
 --// Revised:
 --// 1. Emote name menggunakan ReplicatedStorage.Misc.Emotes -> Attribute "EmoteName"
@@ -17,6 +50,23 @@ local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- Anti-idle supaya gak kena kick AFK
+task.spawn(function()
+    while task.wait(15) do
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChildOfClass("Humanoid") then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    LocalPlayer:Move(Vector3.new(0, 0, 0), true) -- reset input
+                    task.wait(0.1)
+                    LocalPlayer:Move(Vector3.new(0, 0, 0), false)
+                end
+            end
+        end)
+    end
+end)
 
 --==================================================
 -- CONFIG
@@ -38,18 +88,17 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local STARTUP_DELAY_SECONDS = math.random(5, 7)
-local SAFE_SCAN_COOLDOWN_SECONDS = 30
-local SAFE_HOP_COOLDOWN_SECONDS = 20
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 10
+local SAFE_SCAN_COOLDOWN_SECONDS = 2
+local SAFE_HOP_COOLDOWN_SECONDS = 3
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 50
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
-local WEBHOOK_DELAY_SECONDS = 1
-local BOOTH_LOAD_DELAY_SECONDS = 2
+local WEBHOOK_DELAY_SECONDS = 0.3
+local BOOTH_LOAD_DELAY_SECONDS = 0.2
 local BOOTH_LOAD_TIMEOUT_SECONDS = 20
 
-local SERVER_HOP_DELAY_SECONDS = 5
-local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 3
+local SERVER_HOP_DELAY_SECONDS = 1
+local SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS = 1
 local SERVER_HOP_COOLDOWN_SECONDS = SAFE_HOP_COOLDOWN_SECONDS
 local ENABLE_SERVER_HOP = true
 local MIN_PREFERRED_PLAYERS = 10
@@ -59,7 +108,6 @@ local SERVER_API_MAX_PAGES = 3
 local SERVER_HOP_CYCLE = 15
 local PREFERRED_HOP_COUNT = 14
 local TELEPORT_SETTING_KEY = "ApayaServerHopCount"
-local visitedServers = {}   -- tambahkan di atas
 
 local lastServerHopAt = 0
 local lastScanAt = 0
@@ -69,6 +117,8 @@ local hopAttemptCount = 0
 local blockedServerIds = {}
 local lastTeleportTargetId = nil
 local preparedServerId = nil
+-- forward declaration biar bisa dipanggil sebelum di-assign
+local serverHop
 
 --==================================================
 -- AUTO-BUY CONFIG (TAMBAHAN)
@@ -77,168 +127,165 @@ local preparedServerId = nil
 local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
 
 local AUTO_BUY_LIST = {
-    ["Pulseheart Set"] = 4000,
-    ["Cosmic Wrath"] = 34000,
-    ["Lily Katana"] = 4000,
-    ["Snowball Launcher"] = 3400,
-    ["Floppy Chicken"] = 3400,
-    ["Sitting"] = 2300,
-    ["Moonflower Greatsword"] = 3000,
+    ["Pulseheart Set"] = 3900,
+    ["Cosmic Wrath"] = 37000,
+    ["Lily Katana"] = 4200,
+    ["Snowball Launcher"] = 3200,
+    ["Floppy Chicken"] = 3200,
+    ["Sitting"] = 2400,
+    ["Shackled Celestial"] = 500,
+    ["Moonflower Greatsword"] = 3200,
     ["Strawberry Cake Blade"] = 290,
-    ["Star Wand"] = 3200,
+    ["Star Wand"] = 2900,
     ["Queen Blade"] = 27500,
-    ["Meowstruck"] = 1300,
+    ["Meowstruck"] = 1400,
     ["Red Moon Katana"] = 2900,
     ["Gravelight"] = 4500,
-    ["Hellfire King"] = 3100,
+    ["Hellfire King"] = 3200,
     ["Hollow Oath Katana"] = 3200,
     ["Black Oni Katana"] = 3200,
-    ["Eternal Scythe"] = 2000,
-    ["Enchanted Bluerose"] = 2000,
+    ["Eternal Scythe"] = 2400,
+    ["Enchanted Bluerose"] = 2100,
     ["Sunset Pastelblade"] = 2000,
-    ["Glacialis Requiem"] = 1200,
-    ["Crystal Blade"] = 1400,
+    ["Glacialis Requiem"] = 1400,
+    ["Crystal Blade"] = 1500,
     ["Black Ninja Star"] = 1700,
-    ["Riftspike Reaper"] = 1100,
+    ["Riftspike Reaper"] = 1500,
     ["Oceanic Reaper"] = 1500,
-    ["All-Star Striker"] = 1000,
-    ["Coffin"] = 9000,
-    ["Skeleton Bride"] = 6000,
-    ["Black Cat Scythe"] = 790,
-    ["Y2K Blade"] = 600,
-    ["Wolf Greatsword"] = 14200,
-    ["Sea Turtle"] = 12500,
+    ["All-Star Striker"] = 1100,
+    ["Skeleton Bride"] = 6400,
+    ["Black Cat Scythe"] = 900,
+    ["Y2K Blade"] = 400,
+    ["Wolf Greatsword"] = 14000,
     ["North Blade"] = 1400,
-    ["Dual Chroma set"] = 11500,
-    ["Chroma Scythe"] = 7200,
-    ["The Curse"] = 4400,
+    ["Dual Chroma set"] = 11200,
+    ["Chroma Scythe"] = 7500,
+    ["The Curse"] = 3900,
     ["Dual Yinyang Greatsword"] = 4500,
-    ["Prismatic Odachi"] = 3000,
+    ["Prismatic Odachi"] = 3100,
     ["Shark"] = 3000,
-    ["Aetherion"] = 1800,
-    ["Crimson Backblade"] = 1800,
+    ["Aetherion"] = 1900,
+    ["Crimson Backblade"] = 2100,
     ["Thorned Sovereign"] = 2100,
     ["Water Slasher"] = 2100,
-    ["Calamity Guardian"] = 2100,
+    ["Calamity Guardian"] = 2000,
     ["Amethyst Backblade"] = 2000,
-    ["Etheral Bombardment"] = 2000,
-    ["Nebula Sniper"] = 2000,
-    ["Soulrender Scythe"] = 2300,
+    ["Ethereal Bombardment"] = 2400,
+    ["Nebula Sniper"] = 1900,
+    ["Soulrender Scythe"] = 2400,
     ["Blackhole Sword"] = 1900,
     ["Candycane Sniper"] = 1800,
-    ["Draconic Greatsword"] = 1700,
-    ["Venomlight Scythe"] = 1600,
-    ["Santa Greatsword"] = 1600,
+    ["Draconic Greatsword"] = 1500,
+    ["Venomlight Scythe"] = 1800,
+    ["Santa Greatsword"] = 1700,
     ["Dual Black Cat Scythe"] = 1500,
-    ["Red Ninja Star"] = 1500,
+    ["Red Ninja Star"] = 1400,
     ["Pink Ninja Star"] = 1400,
-    ["Starshooter Rapier"] = 1400,
+    ["Starshooter Rapier"] = 1300,
     ["Blue Oni Katana"] = 2800,
-    ["Pink Oni Katana"] = 2900,
-    ["Purple Oni Katana"] = 2900,
+    ["Pink Oni Katana"] = 2800,
+    ["Purple Oni Katana"] = 2800,
     ["Dual Wonderwisp Greatsword"] = 3000,
-    ["Pearl Angel Katana"] = 3200,
-    ["Dual Eternal Greatsword"] = 3200,
-    ["Chroma Ninja Star"] = 3200,
-    ["Proyection Sorcery Katana"] = 3800,
-    ["Blackhole Set"] = 3700,
-    ["Celestial Lance"] = 3500,
-    ["Hellwing Set"] = 4000,
-    ["Halberd"] = 3100,
-    ["Gyaru Katana"] = 4000,
-    ["Guardian of the underworld"] = 3500,
-    ["Devil Greatsword"] = 3800,
-    ["Frostbound Latern"] = 4000,
-    ["Void Guardian"] = 4300,
-    ["Poisoned Bunny"] = 4700,
+    ["Pearl Angel Katana"] = 3500,
+    ["Dual Eternal Greatsword"] = 3100,
+    ["Chroma Ninja Star"] = 3300,
+    ["Proyection Sorcery Katana"] = 3400,
+    ["Hellwing Set"] = 4100,
+    ["Halberd"] = 3900,
+    ["Gyaru Katana"] = 4300,
+    ["Guardian of the underworld"] = 3700,
+    ["Devil Greatsword"] = 3900,
+    ["Frostbound Latern"] = 4300,
+    ["Poisoned Bunny"] = 4600,
     ["Crystal Fairyblade"] = 4700,
     ["Green Ninja Katana"] = 4800,
-    ["Red Ninja Katana"] = 5700,
-    ["Blue Ninja katana"] = 5900,
-    ["Void Blade"] = 1600,
-    ["Abyssal Blade"] = 1300,
-    ["Cloud"] = 22000,
-    ["Crystal Greatblade"] = 1700,
-    ["Kitty Katana"] = 12500,
-    ["Neo-Neko Katana"] = 490,
+    ["Red Ninja Katana"] = 5400,
+    ["Blue Ninja katana"] = 5500,
+    ["Void Blade"] = 1700,
+    ["Abyssal Blade"] = 1350,
+    ["Cloud"] = 23500,
+    ["Crystal Greatblade"] = 1900,
+    ["Kitty Katana"] = 14000,
+    ["Neo-Neko Katana"] = 500,
     ["Witch's Curse"] = 2800,
-    ["Wind Thorn"] = 500,
-    ["Jackolantern"] = 16500,          -- ambil harga termurah (16000)
-    ["Eternal Piercer"] = 28000,
-    ["Valentine Hearts"] = 8500,       -- Emote
-    ["Tiger's Katana"] = 11500,              -- Emote
-    ["Love For You"] = 13000,          -- Emote
-    ["Chroma Blade"] = 14000,          -- ambil harga termurah (13700)
+    ["Wind Thorn"] = 700,
+    ["Jackolantern"] = 17000,
+    ["Eternal Piercer"] = 29000,
+    ["Valentine Hearts"] = 9000,
+    ["Tiger's Katana"] = 12000,
+    ["Love For You"] = 14800,
+    ["Chroma Blade"] = 14500,
     ["King Blade"] = 12000,
-    ["Puppy"] = 16000,                 -- ambil harga termurah (16000)
-    ["Spring Slicer"] = 900,                 -- ambil harga termurah (16000)
-    ["Flaming Sword"] = 3100,
-    ["Pillow"] = 2400,
-    ["Royal Duality"] = 45000,
-    ["Holy Blade"] = 2000,
-    ["Higanbana Katana"] = 3900,
-    ["Moonflower Katana"] = 17500,     -- ambil harga termurah (18000)
+    ["Puppy"] = 16000,
+    ["Flaming Sword"] = 3000,
+    ["Pillow"] = 2500,
+    ["Royal Duality"] = 50000,
+    ["Holy Blade"] = 2100,
+    ["Higanbana Katana"] = 4100,
+    ["Moonflower Katana"] = 18000,
     ["Evil Deal"] = 3000,
-    ["Kitty Rocket"] = 9000,
-    ["Cat Paw"] = 11000,
-    ["Brutality Affection Bat"] = 7200,
-    ["Borealis"] = 26700,              -- ambil harga termurah (26500)
-    ["Celestial Whisper"] = 22000,
-    ["Reindeer"] = 32000,
+    ["Kitty Rocket"] = 9200,
+    ["Cat Paw"] = 10000,
+    ["Brutality Affection Bat"] = 7400,
+    ["Borealis"] = 28000,
+    ["Celestial Whisper"] = 25000,
+    ["Reindeer"] = 35000,
     ["The Conjurer"] = 1500,
-    ["Siam Ember Axe"] = 98000,
-    ["Zombie Slide"] = 100000,         -- Emote
+    --["Siam Ember Axe"] = 98000,
+    --["Zombie Slide"] = 100000,
     ["Prince Blade"] = 2550,
-    ["Slime"] = 7500,
-    ["Aligned Constellation"] = 4100,
-    ["Dancinha"] = 3000,               -- Emote
-    ["Riftflare Katana"] = 3000,
-    ["Fox Katana"] = 5800,
-    ["Milk & Cookies"] = 3000,         -- Emote
-    ["Kraken"] = 6900,
-    ["Sakura's Requiem"] = 3900,
-    ["Hitman"] = 5200,
+    ["Slime"] = 7400,
+    ["Aligned Constellation"] = 4000,
+    ["Dancinha"] = 3000,
+    ["Riftflare Katana"] = 2900,
+    ["Fox Katana"] = 5200,
+    ["Milk & Cookies"] = 3000,
+    ["Kraken"] = 7000,
+    ["Sakura's Requiem"] = 3800,
+    ["Hitman"] = 5100,
     ["Angel Greatsword"] = 3000,
-    ["Bunny"] = 120000,
-    ["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 30000,
+    --["Bunny"] = 120000,
+    --["Ranked Season 15 Top 50"] = 31000,
+    ["Icebound Dominus"] = 34000,
     ["Regret Blades"] = 19000,
-    ["Eternum Galepiercer"] = 8000,
-    ["Phantom Chase"] = 62,            -- Emote
-    -- ===== ITEM BARU =====
-    ["Wicked Crow"] = 9000,
-    ["Hug"] = 15000,
-    ["Black Ninja Katana"] = 9000,
+    ["Eternum Galepiercer"] = 9500,
+    ["Phantom Chase"] = 110,
+    ["Wicked Crow"] = 8700,
+    ["Hug"] = 16000,
+    ["Black Ninja Katana"] = 8900,
     ["Loving Backblade"] = 9000,
-    ["T-Rex"] = 11500,
-    ["Jolly Scythe Set"] = 1750,
-    ["Kitty Launcher"] = 17500,
-    ["Fallen Angel"] = 22000,
+    --["T-Rex"] = 11500,
+    ["Jolly Scythe Set"] = 1800,
+    ["Kitty Launcher"] = 16500,
+    ["Fallen Angel"] = 20000,
     ["Chroma Ninja Katana"] = 24500,
     ["Chroma Seal"] = 31000,
-    ["Seraphim"] = 42000,
-    ["Montagem Miau"] = 7000,
-    ["Legs Kickin'"] = 7800,  
-    ["Winter Wolf"] = 19500,
+    --["Seraphim"] = 39000,
+    ["Montagem Miau"] = 7200,
+    ["Legs Kickin'"] = 8300,
+    ["Winter Wolf"] = 20000,
     ["Night Raver"] = 8300,
-    ["Dual Leviathan Set"] = 3900,
-    ["Gothic Bunny Blade"] = 260,
-    -- ===== TAMBAHAN BARU =====
-    ["Watching The Stars"] = 2800,
-    ["Rabicasada"] = 1600,
+    ["Dual Leviathan Set"] = 3800,
+    ["Gothic Bunny Blade"] = 300,
+    ["Watching The Stars"] = 3000,
+    ["Rabicasada"] = 1700,
     ["Bring it Arround"] = 1700,
-    ["Jackpot"] = 3600,
-    ["King Throne"] = 3000,
+    ["Jackpot"] = 3700,
+    ["King Throne"] = 2900,
     ["Devil Greatsword Emote"] = 3000,
-    ["Popular"] = 1300,
-    ["Kitty Launcher Emote"] = 2300,
+    ["Popular"] = 1400,
+    ["Kitty Launcher Emote"] = 2400,
     ["Crab Rave"] = 2200,
-    ["Luna Bala"] = 1900,
-    ["Floating Sword"] = 2100,
+    --["Luna Bala"] = 1900,
+    --["Floating Sword"] = 2300,
     ["Orbital [NEBULA YORU]"] = 1500,
-    ["Chroma Scythe Emote"] = 1400,
-    ["Coffin Emote"] = 1300,
-    ["Coffin Explosion"] = 6500,
+    ["Coffin Explosion"] = 7000,
+    ["Phantom Ops"] = 2900,
+    ["Emperor Blade"] = 900,
+    ["Floating Hearts Aura"] = 180,
+    ["Menacing"] = 340,
+    ["Lumen Petal"] = 300,
+    ["Rosarium Blade"] = 380,
 }
 
 --==================================================
@@ -261,19 +308,42 @@ local DYNAMIC_BOOSTED_RAP_DIFF = 300           -- BARU: RAP - avg >= selisih ini
 local DYNAMIC_BOOSTED_MIN_TOTAL_SALES = 30     -- total sales di bawah ini dianggap mencurigakan
 
 --==================================================
--- WEBHOOKS
+-- WEBHOOK DELAY CONFIG
 --==================================================
+local SECOND_WEBHOOK_DELAY = 7  -- detik (recommended 10-15)
 
+--==================================================
+-- WEBHOOKS (2 SERVER)
+--==================================================
 local WEBHOOKS = {
-    LOW = "https://discord.com/api/webhooks/1543706713616687157/BAydlQz8g1nANP3ULC1UVZn0W1kLrnunStRY-oJqywxgqpAndQ0_YrIb61rJMWep4sQo",
-    MID = "https://discord.com/api/webhooks/1543706710244589698/_THA47t4vJdnPYY23W5yFto012XfGIi7ULE23UAvr64ZIs7r6AG2cqu-FRLw3u36oo8x",
-    HIGH = "https://discord.com/api/webhooks/1543707373900660756/rNWk0OGFmxHNUStM4RN43nSMegf5xeNNFvFkGMwrub2SP7C05WzzcmwiVL_TkDQ0AGo2",
-    ["100K+"] = "https://discord.com/api/webhooks/1543707100637564999/3yeKaYamEkuKSrdSjTRVhOf_SSRZ_Dag3rCQBgjJLYzwILCnLZLo8_RiOqxNoBo9z8bA",
-    BOOSTED = "https://discord.com/api/webhooks/1543707587617226782/86m7vT9fktckDHFumeoxRmIkLLdAG3cUmmzZ4Gtp4dvR55zJKD9HXX6kq91lIgSElYgZ",
-    NUKE = "https://discord.com/api/webhooks/1543707672304554055/hSQK_b2OS0z9sXeX0gsVnewkcHrXgrr7zZ51oPlomgGsUOnAJQC_iQVvzMN1_uSdUfjS",
-    DEEP_UNDERRAP = "https://discord.com/api/webhooks/1543707474568413264/EE7BJOIOYdu09gXyfJie6VVvQdSGM6XkqPLO-YnBSHkRF9or4bV8P9ErZK3Jjvx_3ij1",
-    AUTO_BUY = "https://discord.com/api/webhooks/1547233702981935195/k4a4Gr7Xa_M2WE3n5-sIbwtjMzWEcR7uYGf0R9YM-fiuDoIoxm-Cu_2klo27mABt75Bm"  -- <-- tambahin ini
+    -- SERVER 1 (kode kirim langsung)
+    SERVER1 = {
+        LOW = "https://discord.com/api/webhooks/1556249938407464963/zr5Z8SPJY1tFABQKMcbY0vteotNb6mhxjcwsroIHL1dPJp68FWhyyL5mILbZU1j0RLWy",
+        MID = "https://discord.com/api/webhooks/1556250029205749860/ScUkJ3cH4IpFMHMgc2ihJ7wGKayC3T47krgcWKz6zWifc8tgJbxAoTrVRiJCCHw1aZm4",
+        HIGH = "https://discord.com/api/webhooks/1556250100731224104/Rc91SXAbnTedssiATPaSkiMzW1avSmsRBtg93l_-l-aaAZH5ehlQi17t9WG0fsVooMOg",
+        ["100K+"] = "https://discord.com/api/webhooks/1556250154380820551/4OvR-52MskIR7PFc1WxKbgJhQk359klE2iSFVa5xMtR9oDukCW-G5UcRVnibuRdF60_T",
+        BOOSTED = "https://discord.com/api/webhooks/1556250203961561088/er_A0xeXlsR3kcZ6yU94w9CkSwd-mQRSqqqjY1elr6ltQBZ2YI47M_NN413PPgjtpj8y",
+        NUKE = "https://discord.com/api/webhooks/1556250250014883923/2qUm0VbDB8pWF0XHMZnwYjtKfqj9PlS4GlpglLe8woiAzlnMvf995Q2Wsg6uQ8Olbbld",
+        DEEP_UNDERRAP = "https://discord.com/api/webhooks/1556250301286322211/w9z4F5MuyxamX9uHtYDFqhckowf37uhJI0nqiyex-UghxMnN9y48vFzjRW0fV7VzHRo7",
+        AUTO_BUY = "https://discord.com/api/webhooks/1556250385511882853/egiraUPm5EvO8GrPVUbgD3hvRRpW7_xPxu2vatqDVgyg8MvDSrQoZvi5n9yLLPXb_8Qf",
+    },
+    -- SERVER 2 (kode kirim setelah delay)
+    SERVER2 = {
+        LOW = "https://discord.com/api/webhooks/1551501843773784134/B_TyApwNmK70RXS3_hUtjqjPYwWU2y9ZzogQ5Hhen-mvg0OI0tFqgp6C-vKxv3FwWjjA",
+        MID = "https://discord.com/api/webhooks/1551501902498500702/sbF6owgb1-i-cRYUhOajnKjlb-etcTUDBoI_MmrAGzTaLYp2dESb5BZGNRhgWtkErGkD",
+        HIGH = "https://discord.com/api/webhooks/1551501956130799716/C5VIlFFjBf01AjnsVtspKfckDPfRO5uqJshw7uQ32YHMkNpb-iHn0L2ygB4WxDYXaWnd",
+        ["100K+"] = "https://discord.com/api/webhooks/1551502081050017865/gWokJ-KdVhkBLt0uP3G8_34jaw3-ylCzJ_zQ6OxJnbNqkV_S-IlGz16YegPcLkJ7X48n",
+        BOOSTED = "https://discord.com/api/webhooks/1551502193482399764/3ZkOX2PhlrsYFztaGW-U6kjFKrXEybRXBTwPwUqbUzQ1MTPgIW4nYW54AWZkSRD2--Ws",
+        NUKE = "https://discord.com/api/webhooks/1551502133738741761/vM_TPC3osHpvVg3wU5QEBCPtYo6LMrAkPdB4g_BTfRyX9Zx1srPih6B3Ew1_vSAUwh-R",
+        DEEP_UNDERRAP = "https://discord.com/api/webhooks/1551502008153014272/w8HH1oUVcd5YcChmyFGsIZDmaoYyqILPTviecTniw4YWkrCoFCxBGBtmM7IehwCvEwr4",
+        AUTO_BUY = "https://discord.com/api/webhooks/1553920710508945551/O4RirCUjuiBN5bVTyOwGnguwEuBzNmItLd9_sWvGKlymT7USpcRyOQaf5uWclRFxYEJU",
+    },
 }
+
+-- Alias biar kode lama yang pakai `AUTO_BUY_LIST[itemName]` tetep jalan
+-- (gak perlu diubah kalau kamu udah fix dari sebelumnya)
+
+print("[Scanner] ✅ Loaded - Auto Buy " .. (AUTO_BUY_ENABLED and "ON" or "OFF"))
 
 --==================================================
 -- MANUAL BOOSTED LIST
@@ -286,7 +356,20 @@ local BOOSTED_ITEMS = {
     ["Glacial Blade"] = true,
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
+    ["Radiant Duckling Explosion"] = true,
     ["Tidewither"] = true,
+    ["Blackhole Sword"] = true,
+    ["Glacial Dominance"] = true,
+    ["Sakura Scythe"] = true,
+    ["Prismatic Harvester"] = true,
+    ["Infinite Blade"] = true,
+    ["Witch's Broom"] = true,
+    ["Spring Slicer"] = true,
+    ["Dual Shadow Kunai"] = true,
+    ["Masked Horror Blade"] = true,
+    ["Mothyx Blade"] = true,
+    ["Radiant Duckling Lance"] = true,
+    ["Ghostfish Blade"] = true,
     ["Astral Sword"] = true,
     ["Singularity Scythe"] = true,
     ["Nightclaw Blade"] = true,
@@ -299,8 +382,13 @@ local BOOSTED_ITEMS = {
     ["Primordial Lance"] = true,
     ["Ranked Season 6 Top 50"] = true,
     ["Dawnpiercer"] = true,
+    ["Aetherial Azure Reckoner"] = true,
+    ["Nightshade Saber"] = true,
+    ["Voltfire Blade"] = true,
+    ["Starfish Blade"] = true,
     ["Ocean Surfer"] = true,
     ["Knighthood"] = true,
+    ["Prismatic Gem Blade"] = true,
     ["Royal Throne"] = true,
     ["Gravebone Scythe"] = true,
     ["Loving Backblade"] = true,
@@ -310,14 +398,24 @@ local BOOSTED_ITEMS = {
     ["Solar Saber"] = true,
     ["Remastered Linked Sword"] = true,
     ["Prince Legacy Scythe"] = true,
+    ["Prince Legacy Blade"] = true,
     ["Nature Cards"] = true,
     ["Proyection Sorcery Katana"] = true,
     ["Nebula Katana"] = true,
     ["Crystal Ribbon Blade"] = true,
     ["Dual Stellar Revolver"] = true,
     ["FROSTWALL"] = true,
+    ["Dual Aetherial Kunai"] = true,
+    ["Clans Warrior"] = true,
+    ["Lover's Axe"] = true,
+    ["Chilling Breath"] = true,
+    ["Necrotic Burst"] = true,
+    ["Berry Edge"] = true,
+    ["Dual Sea Sovereign"] = true,
+    ["Love Blade"] = true,
+    ["Serpentbane"] = true,
+    ["Plasma Gauntlets"] = true,
     ["Crystal Hammer"] = true,
-    ["Nightclaw Blade"] = true,
     ["Void Scythe"] = true,
     ["Inferno Lance"] = true,
     ["Inferno Katana"] = true,
@@ -341,6 +439,7 @@ local BOOSTED_ITEMS = {
     ["Bloom Katana"] = true,
     ["Golden Crescent Bow"] = true,
     ["Raven Scythe"] = true,
+    ["Ranked Season 4 Top 25 Sword"] = true,
     ["Twilight Blade"] = true,
     ["Ranked Season 13 Champion"] = true,
     ["Dual Jolly Fan"] = true,
@@ -349,7 +448,7 @@ local BOOSTED_ITEMS = {
     ["Elemental Masterblade"] = true,
     ["Kurogin Scythe"] = true,
     ["Heart Blade"] = true,
-    ["Nightclaw Blade"] = true,
+    ["Serpent's Coreplosion"] = true,
     ["Blizzard Slayer"] = true,
     ["Zeus' Lightning"] = true,
     ["Dual Lucky Fan"] = true,
@@ -394,7 +493,6 @@ local BOOSTED_ITEMS = {
     ["Ranked Season 20 Champion"] = true,
     ["Dual Sakura Fan"] = true,
     ["Frog"] = true,
-    ["Astral Sword"] = true,
     ["Y2K Blade"] = true,
     ["Dual Aurum Etherius"] = true,
     ["Inferno Greatscythe"] = true,
@@ -467,6 +565,8 @@ local BOOSTED_ITEMS = {
     ["Wreath Shot"] = true,
     ["Zeus' Revenge"] = true,
     ["2025"] = true,
+    ["Eternal Autumn"] = true,
+    ["Sunshine Saber"] = true,
     ["Black Oni Katana"] = true,
     ["Evil Cyborg Blade"] = true,
     ["Strawberry Cake Lance"] = true,
@@ -538,6 +638,8 @@ local BOOSTED_ITEMS = {
     ["Corrupted Bow"] = true,
     ["Corrupted Frostblade"] = true,
     ["Crimson Katana"] = true,
+    ["Nightclaw Scythe"] = true,
+    ["Crimson Kagune"] = true,
     ["Cyber Cleaveblade"] = true,
     ["Cyber King's Sword"] = true,
     ["Cyber Slasher"] = true,
@@ -607,6 +709,7 @@ local BOOSTED_ITEMS = {
     ["Inferno Reaver"] = true,
     ["Iridescent Stormblade"] = true,
     ["Kraken Scythe"] = true,
+    ["Radiant Duckling Kunai"] = true,
     ["Kurogin Katana"] = true,
     ["Laser Twinblade"] = true,
     ["Lemonade Slicer"] = true,
@@ -622,6 +725,7 @@ local BOOSTED_ITEMS = {
     ["Permafrost Flowerblade"] = true,
     ["Permafrost Staff"] = true,
     ["Phantom Blade"] = true,
+    ["NO BATIDÃO"] = true,
     ["Phantom Warrior"] = true,
     ["Plasma Beam Blade"] = true,
     ["Plasma Blasters (Finisher)"] = true,
@@ -749,48 +853,17 @@ local function safeRequest(options, retries)
         return nil
     end
 
-    retries = retries or 3  -- default 3
+    local success, response = pcall(function()
+        return REQUEST({
+            Url = options.Url,
+            Method = options.Method or "GET",
+            Headers = options.Headers,
+            Body = options.Body,
+        })
+    end)
 
-    for attempt = 1, retries + 1 do
-        local success, response = pcall(function()
-            return REQUEST({
-                Url = options.Url,
-                Method = options.Method or "GET",
-                Headers = options.Headers,
-                Body = options.Body,
-            })
-        end)
-
-        if success and response then
-            local statusCode = tonumber(response.StatusCode)
-
-            if statusCode == 429 then
-                -- Rate limit: tunggu sesuai Retry-After
-                local waitTime = 2  -- default
-                if response.Headers and response.Headers["Retry-After"] then
-                    waitTime = tonumber(response.Headers["Retry-After"]) or 2
-                end
-                if attempt <= retries then
-                    warn("[REQUEST] Rate limit (429), menunggu", waitTime, "detik...")
-                    task.wait(waitTime + 0.5)
-                    continue
-                end
-            end
-
-            if not statusCode
-                or (statusCode >= 200 and statusCode < 300)
-                or (statusCode < 500 and statusCode ~= 429) then
-                return response
-            end
-
-            if attempt > retries then
-                return response
-            end
-        end
-
-        if attempt <= retries then
-            task.wait(0.5 * attempt)
-        end
+    if success then
+        return response
     end
 
     return nil
@@ -848,36 +921,83 @@ end
 -- GET CONTROLLERS
 --==================================================
 
-local Controllers =
-    ReplicatedStorage:WaitForChild("Controllers", 30)
+--==================================================
+-- WAIT GAME FULLY LOADED
+--==================================================
+do
+    local startTime = os.time()
+    local loadTimeout = 180  -- 3 menit, lebih aman
 
-local Trading =
-    Controllers:WaitForChild("Trading", 30)
+    while not game:IsLoaded() do
+        task.wait(0.5)
 
-local BoothControllerModule =
-    Controllers.Booth:WaitForChild("BoothController", 30)
-
-local RAPControllerModule =
-    Trading:WaitForChild("RAPController", 30)
-
-if not BoothControllerModule or not RAPControllerModule then
-    warn("[Scanner] ❌ Module controller tidak ditemukan. Tunggu 5 detik lalu coba lagi...")
-    task.wait(5)
-    if not BoothControllerModule then
-        BoothControllerModule = Controllers.Booth:WaitForChild("BoothController", 30)
+        if os.time() - startTime > loadTimeout then
+            warn("[Scanner] Game gak kelar load " .. loadTimeout .. " detik, stop.")
+            blockedServerIds[tostring(game.JobId)] = true
+            return
+        end
     end
-    if not RAPControllerModule then
-        RAPControllerModule = Trading:WaitForChild("RAPController", 30)
-    end
+    task.wait(3)  -- buffer buat replication
 end
 
+--==================================================
+-- ROBUST WaitForChild (gak crash kalau nil)
+--==================================================
+local function waitChildSafe(parent, name, timeout)
+    if not parent then return nil end
+    local deadline = os.clock() + (timeout or 30)
+    repeat
+        local c = parent:FindFirstChild(name)
+        if c then return c end
+        task.wait(0.5)
+    until os.clock() >= deadline
+    return nil
+end
+
+--==================================================
+-- GET CONTROLLERS (RETRY 2X)
+--==================================================
+local Controllers = waitChildSafe(ReplicatedStorage, "Controllers", 30)
+
+if not Controllers then
+    warn("[Scanner] Controllers timeout. Tunggu 15 detik, retry...")
+    task.wait(15)
+    Controllers = waitChildSafe(ReplicatedStorage, "Controllers", 60)
+end
+
+if not Controllers then
+    warn("[Scanner] ❌ Controllers gagal 2x. Stop script (server gak ready).")
+    return  -- guard lu bakal restart via queue berikutnya
+end
+
+local Trading = waitChildSafe(Controllers, "Trading", 30)
+local Booth = waitChildSafe(Controllers, "Booth", 30)
+
+if not Trading or not Booth then
+    warn("[Scanner] ❌ Trading/Booth gak ditemukan. Stop.")
+    return
+end
+
+local BoothControllerModule = waitChildSafe(Booth, "BoothController", 30)
+local RAPControllerModule = waitChildSafe(Trading, "RAPController", 30)
+
+if not BoothControllerModule or not RAPControllerModule then
+    warn("[Scanner] ❌ Controller modules gak ditemukan. Stop.")
+    return
+end
+
+-- REQUIRED MODULES (INI YANG HILANG!)
 local BoothController = safeRequire(BoothControllerModule, "BoothController")
 local RAPController = safeRequire(RAPControllerModule, "RAPController")
 
 if not BoothController or not RAPController then
-    warn("[Scanner] ❌ Gagal load controller. Stop script.")
+    warn("[Scanner] ❌ Gagal require controller modules. Stop.")
     return
 end
+
+--==================================================
+-- REPLICATED INSTANCES
+--==================================================
 
 --==================================================
 -- REPLICATED INSTANCES
@@ -935,6 +1055,32 @@ end
 
 local RAPHistoryRequest =
     Net:RemoteFunction("RequestRAPHistory")
+
+--==================================================
+-- PURCHASE REMOTE
+--==================================================
+local PurchaseRemote
+do
+    local ok, remote = pcall(function()
+        return Net:RemoteFunction("PurchaseBoothListing")
+    end)
+    if ok and remote then
+        PurchaseRemote = remote
+        print("[AUTO-BUY] ✅ PurchaseRemote via Net:RemoteFunction")
+    else
+        local rawNet = ReplicatedStorage.Packages._Index["sleitnick_net@0.1.0"].net
+        PurchaseRemote = rawNet:FindFirstChild("RF/PurchaseBoothListing")
+        if PurchaseRemote then
+            print("[AUTO-BUY] ✅ PurchaseRemote via raw module")
+        end
+    end
+end
+
+if not PurchaseRemote then
+    warn("[AUTO-BUY] ❌ PurchaseRemote nil! Auto-buy tidak akan jalan.")
+else
+    print("[AUTO-BUY] ✅ PurchaseRemote ready")
+end
 
 local SalesHistoryCache = {}
 
@@ -1083,7 +1229,7 @@ local function getSalesHistory(itemType, itemKey)
         },
     }
 
-    local chartUrl = "https://quickchart.io/chart?width=900&height=460&format=png&c="
+    local chartUrl = "https://quickchart.io/chart?width=500&height=300&format=png&c="
         .. HttpService:UrlEncode(HttpService:JSONEncode(chartConfig))
 
     local result = {
@@ -1098,74 +1244,43 @@ local function getSalesHistory(itemType, itemKey)
     return result
 end
 
--- Tracking item yang sering gagal
-local failedItemTracker = {}
-local FAILED_ITEM_LIMIT = 10  -- kalau gagal 5x, skip item itu selamanya (sampai script restart)
+--==================================================
+-- AUTO-BUY (pakai method lama: BoothController:PurchaseListing)
+--==================================================
 
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
     if not AUTO_BUY_ENABLED then return false end
+
     if price > maxPrice then
-        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
+        print("[AUTO-BUY] ⏭️ Harga terlalu tinggi:", itemName, price, ">", maxPrice)
         return false
     end
 
-    -- Skip item yang sering gagal
-    if failedItemTracker[itemName] and failedItemTracker[itemName] >= FAILED_ITEM_LIMIT then
-        print("[AUTO-BUY] Skip item (sering gagal):", itemName)
-        return false
-    end
-
+    -- WAJIB pakai Player object. Kalau seller offline, skip.
     local numericOwnerId = tonumber(ownerId)
     local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
-    local ownerArg = player or ownerId
 
-    print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", ownerArg, "listingId:", listingId)
-
-    for attempt = 1, 10 do  
-        local success, result = pcall(function()
-            return BoothController:PurchaseListing(ownerArg, listingId)
-        end)
-
-        local isSuccessful = false
-
-        if success then
-            -- Cek berbagai bentuk return value
-            if typeof(result) == "boolean" then
-                isSuccessful = result
-            elseif typeof(result) == "table" then
-                if result.Success == true or result.success == true or result.Ok == true or result.ok == true then
-                    isSuccessful = true
-                end
-            elseif result == nil then
-                -- Kadang fungsi return nil saat sukses (fire and forget)
-                -- Kita asumsikan sukses, biar webhook tetap dikirim
-                -- Tapi kita tetap cek apakah listing masih ada
-                isSuccessful = true
-            end
-
-            if isSuccessful then
-                print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-                return true
-            else
-                warn("[AUTO-BUY] ❌ Gagal (server reject) attempt "..attempt.." :", itemName, "| result:", tostring(result))
-
-                -- Kalau gagal di attempt 1-2, coba lagi dengan delay lebih panjang
-                if attempt < 5 then
-                    task.wait(2 * attempt)  -- delay makin panjang
-                end
-            end
-        else
-            warn("[AUTO-BUY] ❌ Gagal (error) attempt "..attempt.." :", itemName, tostring(result))
-            if attempt < 10 then
-                task.wait(2 * attempt)
-            end
-        end
+    if not player then
+        warn("[AUTO-BUY] ⏭️ Skip — seller offline (ownerId:", tostring(ownerId), ")")
+        return false
     end
 
-    -- Kalau gagal total, catat
-    failedItemTracker[itemName] = (failedItemTracker[itemName] or 0) + 1
-    print("[AUTO-BUY] Failed count untuk", itemName, ":", failedItemTracker[itemName])
+    print(string.format("[AUTO-BUY] 🎯 BELI: %s | price: %d | max: %d | seller: %s",
+        itemName, price, maxPrice, player.Name))
 
+    local success, result = pcall(function()
+        return BoothController:PurchaseListing(player, listingId)
+    end)
+
+    -- PENTING: cek `result == true`, bukan cuma `success`
+    if success and result == true then
+        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+        return true
+    end
+
+    warn("[AUTO-BUY] ❌ GAGAL:", itemName,
+        "| success:", tostring(success),
+        "| result:", tostring(result))
     return false
 end
 
@@ -2280,345 +2395,255 @@ local function getTierColor(tierName)
 end
 
 --==================================================
--- WEBHOOK (dimodifikasi untuk SALES CHART)
+-- ITEM DETAILS (Finisher / Mount / Dual)
 --==================================================
 
-local function sendWebhook(
-    webhookType,
-    ownerId,
-    listing
-)
+local ItemDetailsCache = {}
 
-    local webhookUrl
-
-    if type(WEBHOOKS) == "table" then
-        webhookUrl = WEBHOOKS[webhookType]
+local function getItemDetails(itemType, itemKey)
+    if not itemType or not itemKey then
+        return { isFinisher = false, hasMount = false }
     end
 
-    if not webhookUrl
-        or webhookUrl == ""
-        or string.find(
-            webhookUrl,
-            "PASTE_"
-        ) then
-
-        warn(
-            "[WEBHOOK] URL belum diisi:",
-            webhookType
-        )
-
-        return false
+    local cacheKey = tostring(itemType) .. ":" .. tostring(itemKey)
+    if ItemDetailsCache[cacheKey] then
+        return ItemDetailsCache[cacheKey]
     end
 
-    if not REQUEST then
+    local details = { isFinisher = false, hasMount = false, isDual = false }
 
-        warn(
-            "[WEBHOOK] Request function tidak tersedia."
-        )
-
-        return false
+    -- Deteksi Dual dari nama key
+    if string.find(string.lower(tostring(itemKey)), "dual") then
+        details.isDual = true
     end
 
-    local ownerInfo =
-        getOwnerInfo(ownerId)
+    -- Inspect instance
+    local instance
+    pcall(function()
+        if itemType == "Sword" then
+            instance = ReplicatedInstances:GetInstance("Swords", tostring(itemKey))
+        elseif itemType == "Emote" then
+            instance = EmotesFolder:FindFirstChild(tostring(itemKey))
+        end
+    end)
 
-    local ownerAvatarUrl =
-        getOwnerAvatarUrl(ownerId)
+    if instance then
+        -- Cek attributes
+        pcall(function()
+            for attrName, attrValue in pairs(instance:GetAttributes()) do
+                local n = string.lower(tostring(attrName))
+                if string.find(n, "finisher") and attrValue then
+                    details.isFinisher = true
+                end
+                if string.find(n, "mount") and attrValue then
+                    details.hasMount = true
+                end
+                if string.find(n, "dual") and attrValue then
+                    details.isDual = true
+                end
+            end
+        end)
 
-    local ownerProfileUrl =
-        getOwnerProfileUrl(ownerId)
-
-    local title =
-        "🚨 UNDER VALUE ITEM DETECTED"
-
-    if webhookType == "BOOSTED" then
-
-        title =
-            "⚡ BOOSTED ITEM DETECTED"
-
-    elseif webhookType == "NUKE" then
-
-        title =
-            "☢️ NUKE ITEM DETECTED"
-
-    elseif webhookType == "DEEP_UNDERRAP" then
-
-        title =
-            "🔥 50%+ UNDERRAP DETECTED"
+        -- Cek children/descendants
+        pcall(function()
+            for _, child in ipairs(instance:GetDescendants()) do
+                local n = string.lower(tostring(child.Name))
+                if string.find(n, "finisher") then
+                    details.isFinisher = true
+                end
+                if string.find(n, "mount") then
+                    details.hasMount = true
+                end
+            end
+        end)
     end
 
-    local fields = {
+    ItemDetailsCache[cacheKey] = details
+    return details
+end
 
-        {
-            name = "Seller",
-            value =
-                tostring(
-                    ownerInfo.displayName
-                ),
-            inline = true,
-        },
-
-        {
-            name = "Item",
-            value = string.format(
-                "`%s`",
-                tostring(listing.itemName)
-            ),
-            inline = true,
-        },
-
-        {
-            name = "Type",
-            value = string.format(
-                "`%s`",
-                tostring(listing.itemType)
-            ),
-            inline = true,
-        },
-
-        {
-            name = "RAP",
-            value = string.format(
-                "`%s`",
-                tostring(listing.rap)
-            ),
-            inline = true,
-        },
-
-        {
-            name = "Price",
-            value = string.format(
-                "`%s`",
-                tostring(listing.price)
-            ),
-            inline = true,
-        },
-    }
-
-    --==================================================
-    -- NUKE
-    --==================================================
-
-    if webhookType == "NUKE" then
-
-        table.insert(fields, {
-            name = "Nuke Limit",
-            value = string.format(
-                "`%s`",
-                tostring(
-                    listing.nukeLimit or "N/A"
-                )
-            ),
-            inline = true,
-        })
-
-        table.insert(fields, {
-            name = "Profit",
-            value = string.format(
-                "`%s`",
-                tostring(listing.profit)
-            ),
-            inline = true,
-        })
-
-    --==================================================
-    -- BOOSTED
-    --==================================================
-
-    elseif webhookType == "BOOSTED" then
-
-        table.insert(fields, {
-            name = "Profit",
-            value = string.format(
-                "`%s`",
-                tostring(listing.profit)
-            ),
-            inline = true,
-        })
-
-    --==================================================
-    -- NORMAL / DEEP
-    --==================================================
-
-    else
-
-        table.insert(fields, {
-            name = "Profit",
-            value = string.format(
-                "`%s (%.0f%%)`",
-                tostring(listing.profit),
-                listing.discount
-            ),
-            inline = true,
-        })
-    end
-
-    table.insert(fields, {
-        name = "Booth Claimed",
-        value = listing.boothClaimed
-            and "✅ Sudah claim — listing masih aktif"
-            or "❌ Belum claim",
-        inline = false,
-    })
-
-    table.insert(fields, {
-        name = "Booth Location",
-        value = listing.boothLocation
-            or "Lokasi tidak tersedia",
-        inline = false,
-    })
-
-    --==================================================
-    -- SALES HISTORY STATS (TAMBAHAN)
-    --==================================================
-
-    if listing.salesHistory then
-        table.insert(fields, {
-            name = "📊 Sales Trend (last " .. SALES_HISTORY_DAYS .. " days)",
-            value = string.format(
-                "Avg RAP: **%s** | Total Sales: **%s**",
-                tostring(listing.salesHistory.averageRap),
-                tostring(listing.salesHistory.totalSales)
-            ),
-            inline = false,
-        })
-    end
-
-        --==================================================
-    -- SERVER
-    --==================================================
-
-    table.insert(fields, {
-        name = "Server Link",
-        value = getServerLink(),
-        inline = false,
-    })
-
-    --==================================================
-    -- PROFILE
-    --==================================================
-
-    if ownerProfileUrl then
-        table.insert(fields, {
-            name = "Seller Profile",
-            value = ownerProfileUrl,
-            inline = false,
-        })
-    end
-
-    --==================================================
-    -- IMAGE
-    --==================================================
-
-    local itemImageUrl =
-        getItemImageUrl(
-            listing.itemType,
-            listing.itemKey
-        )
-
-    --==================================================
-    -- PAYLOAD
-    --==================================================
-
-    local embed = {
-        title = title,
-
-        timestamp = DateTime.now():ToIsoDate(),
-
-        color =
-            getTierColor(
-                webhookType
-            ),
-
-        fields = fields,
-
-        footer = {
-            text =
-                "Type: "
-                .. tostring(webhookType)
-                .. " | Seller ID: "
-                .. tostring(ownerId),
-        },
-    }
-
-    --==================================================
-    -- ADD SWORD IMAGE
-    --==================================================
-
-    if itemImageUrl then
-
-        embed.thumbnail = {
-            url = itemImageUrl,
-        }
-
-        if DEBUG then
-            print(
-                "[WEBHOOK IMAGE]",
-                listing.itemName,
-                itemImageUrl
-            )
+-- Helper: format angka pakai koma
+local function formatNumber(n)
+    local num = tonumber(n)
+    if not num then return tostring(n) end
+    local str = tostring(math.floor(num))
+    local result = ""
+    local count = 0
+    for i = #str, 1, -1 do
+        result = string.sub(str, i, i) .. result
+        count = count + 1
+        if count % 3 == 0 and i > 1 then
+            result = "," .. result
         end
     end
+    return result
+end
 
-    --==================================================
-    -- ADD SALES CHART (TAMBAHAN)
-    --==================================================
+--==================================================
+-- WEBHOOK (versi compact dengan emoji token)
+--==================================================
 
-    if listing.salesHistory
-        and listing.salesHistory.chartUrl then
-
-        embed.image = {
-            url = listing.salesHistory.chartUrl,
-        }
+--==================================================
+-- KIRIM KE SATU URL
+--==================================================
+local function sendOneWebhook(webhookUrl, payload, label, itemName)
+    if not webhookUrl or webhookUrl == "" then
+        warn("[WEBHOOK] URL kosong untuk", label, "|", tostring(itemName))
+        return false
     end
 
-    local payload = {
-        username =
-            ownerInfo.displayName,
-
-        avatar_url =
-            ownerAvatarUrl,
-
-        embeds = {
-            embed
-        },
-    }
-
-    -- ===== PERBAIKAN: retry 3 dan logging =====
     local response = safeRequest({
         Url = webhookUrl,
         Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json",
-        },
+        Headers = { ["Content-Type"] = "application/json" },
         Body = HttpService:JSONEncode(payload),
-    }, 3)   -- <-- retry 3 kali
+    }, 3)
 
     if not response then
-        warn("[WEBHOOK] No response from Discord for", webhookType, listing.itemName)
+        warn("[WEBHOOK] No response", label, "|", tostring(itemName))
         return false
     end
 
     local status = tonumber(response.StatusCode)
     if status and status >= 400 then
-        warn("[WEBHOOK] Discord error", status, "for", webhookType, ":", tostring(response.Body))
+        warn("[WEBHOOK] Discord error", status, label, "|", tostring(itemName),
+            ":", tostring(response.Body))
         return false
     end
 
-    if DEBUG then
+    return true
+end
 
-        print(
-            "[WEBHOOK SENT]",
-            webhookType,
-            ownerInfo.displayName,
-            listing.itemName,
-            itemImageUrl
-                and "[IMAGE]"
-                or "[NO IMAGE]"
-        )
+local function sendWebhook(webhookType, ownerId, listing)
+    local server1Url = WEBHOOKS.SERVER1 and WEBHOOKS.SERVER1[webhookType]
+    local server2Url = WEBHOOKS.SERVER2 and WEBHOOKS.SERVER2[webhookType]
+
+    if not server1Url or server1Url == "" or string.find(server1Url, "PASTE_") then
+        warn("[WEBHOOK] URL Server 1 belum diisi:", webhookType)
+        return false
     end
 
-    return true
+    if not REQUEST then
+        warn("[WEBHOOK] Request function tidak tersedia.")
+        return false
+    end
+
+    -- ====== BUILD PAYLOAD (sama untuk kedua server) ======
+    local ownerInfo = getOwnerInfo(ownerId)
+    local ownerAvatarUrl = getOwnerAvatarUrl(ownerId)
+    local ownerProfileUrl = getOwnerProfileUrl(ownerId)
+    local itemImageUrl = getItemImageUrl(listing.itemType, listing.itemKey)
+
+    local details = getItemDetails(listing.itemType, listing.itemKey)
+
+    local tags = {}
+    if details.isFinisher then table.insert(tags, "Finisher") end
+    if details.hasMount then table.insert(tags, "Mount") end
+    if details.isDual then table.insert(tags, "Dual") end
+
+    local itemDisplay = "**" .. tostring(listing.itemName) .. "**"
+    if #tags > 0 then
+        itemDisplay = itemDisplay .. " **(" .. table.concat(tags, ", ") .. ")**"
+    end
+    if listing.itemType then
+        itemDisplay = itemDisplay .. "\n**(" .. tostring(listing.itemType) .. ")**"
+    end
+
+    local boothText
+    if listing.boothClaimed then
+        local loc = tostring(listing.boothLocation or "")
+        local ring = "Luar"
+        if string.find(loc, "Dalam") then
+            ring = "Dalam"
+        end
+        boothText = "✅ Yes • " .. ring
+    else
+        boothText = "❌ Belum claim"
+    end
+
+    local diffText = string.format("%s (%.0f%%)",
+        formatNumber(listing.profit), listing.discount)
+
+    local serverShort = string.format("roblox://placeId=%s&gameInstanceId=%s",
+        tostring(game.PlaceId), tostring(game.JobId))
+
+    local classification
+    if webhookType == "NUKE" then
+        classification = "☢️ NUKE"
+    elseif webhookType == "BOOSTED" then
+        classification = "⚡ BOOSTED"
+    elseif webhookType == "DEEP_UNDERRAP" then
+        classification = "🔥 DEEP UNDERRAP"
+    else
+        classification = "<:token:1551478922242162708> " .. tostring(webhookType)
+    end
+
+    local fields = {
+        { name = "Seller", value = tostring(ownerInfo.displayName) .. " (`" .. tostring(ownerId) .. "`)", inline = true },
+        { name = "Item Name", value = itemDisplay, inline = true },
+        { name = "Price", value = "<:token:1551478922242162708> " .. formatNumber(listing.price), inline = true },
+        { name = "Current RAP", value = "📊 " .. formatNumber(listing.rap), inline = true },
+        { name = "Difference", value = "🔻 " .. diffText, inline = true },
+        { name = "Booth", value = boothText, inline = true },
+        { name = "Server", value = serverShort, inline = false },
+        { name = "Classification", value = classification, inline = false },
+    }
+
+    if listing.salesHistory then
+        table.insert(fields, {
+            name = "📈 Sales Trend (last " .. SALES_HISTORY_DAYS .. " days)",
+            value = string.format("Avg RAP: **%s** | Total Sales: **%s**",
+                formatNumber(listing.salesHistory.averageRap),
+                formatNumber(listing.salesHistory.totalSales)),
+            inline = false,
+        })
+    end
+
+    if ownerProfileUrl then
+        table.insert(fields, { name = "Profile", value = ownerProfileUrl, inline = false })
+    end
+
+    local embed = {
+        title = "🔷 Under RAP Scanner",
+        color = getTierColor(webhookType),
+        fields = fields,
+        timestamp = DateTime.now():ToIsoDate(),
+        footer = {
+            text = "Type: " .. tostring(webhookType) ..
+                   " | Seller ID: " .. tostring(ownerId),
+        },
+    }
+
+    if itemImageUrl then
+        embed.thumbnail = { url = itemImageUrl }
+    elseif ownerAvatarUrl then
+        embed.thumbnail = { url = ownerAvatarUrl }
+    end
+
+    local SCANNER_AVATAR = "https://cdn.discordapp.com/attachments/1457719933348876399/1551496854670282813/1785800458495.jpg?ex=6ab22f8b&is=6ab0de0b&hm=dce44efe43a59bd268d55fec80fc9a3d9d02a9386f43c8a40b24d485dd1e9a9d"
+
+    local payload = {
+        username = tostring(ownerInfo.displayName or ownerInfo.username or "Under RAP Scanner"),
+        avatar_url = ownerAvatarUrl or SCANNER_AVATAR,
+        embeds = { embed },
+    }
+
+    -- ====== KIRIM KE SERVER 1 (LANGSUNG) ======
+    local ok1 = sendOneWebhook(server1Url, payload, "SERVER1/" .. tostring(webhookType), listing.itemName)
+
+    -- ====== KIRIM KE SERVER 2 (DELAY) ======
+    if server2Url and server2Url ~= "" and not string.find(server2Url, "PASTE_") then
+        local itemLabel = listing.itemName
+        local wt = webhookType
+
+        task.delay(SECOND_WEBHOOK_DELAY, function()
+            pcall(function()
+                sendOneWebhook(server2Url, payload, "SERVER2/" .. tostring(wt), itemLabel)
+            end)
+        end)
+    end
+
+    return ok1
 end
 
 --==================================================
@@ -2626,9 +2651,11 @@ end
 --==================================================
 
 local function sendAutoBuyWebhook(itemName, itemType, itemKey, price, rap, profit, discount, ownerId)
-    local webhookUrl = WEBHOOKS.AUTO_BUY
-    if not webhookUrl or webhookUrl == "" or string.find(webhookUrl, "PASTE_") then
-        warn("[AUTO-BUY WEBHOOK] URL belum diisi.")
+    local server1Url = WEBHOOKS.SERVER1 and WEBHOOKS.SERVER1.AUTO_BUY
+    local server2Url = WEBHOOKS.SERVER2 and WEBHOOKS.SERVER2.AUTO_BUY
+
+    if not server1Url or server1Url == "" or string.find(server1Url, "PASTE_") then
+        warn("[AUTO-BUY WEBHOOK] URL Server 1 belum diisi.")
         return false
     end
 
@@ -2722,31 +2749,24 @@ local function sendAutoBuyWebhook(itemName, itemType, itemKey, price, rap, profi
         embeds = { embed },
     }
 
-    local response = safeRequest({
-        Url = webhookUrl,
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json",
-        },
-        Body = HttpService:JSONEncode(payload),
-    }, 3)
+        -- ====== KIRIM KE SERVER 1 (LANGSUNG) ======
+    local ok1 = sendOneWebhook(server1Url, payload, "SERVER1/AUTO_BUY", itemName)
 
-    if not response then
-        warn("[AUTO-BUY WEBHOOK] No response from Discord for", itemName)
-        return false
+    -- ====== KIRIM KE SERVER 2 (DELAY) ======
+    if server2Url and server2Url ~= "" and not string.find(server2Url, "PASTE_") then
+        local itemLabel = itemName
+        task.delay(SECOND_WEBHOOK_DELAY, function()
+            pcall(function()
+                sendOneWebhook(server2Url, payload, "SERVER2/AUTO_BUY", itemLabel)
+            end)
+        end)
     end
 
-    local status = tonumber(response.StatusCode)
-    if status and status >= 400 then
-        warn("[AUTO-BUY WEBHOOK] Discord error", status, ":", tostring(response.Body))
-        return false
+    if ok1 and DEBUG then
+        print("[AUTO-BUY WEBHOOK] Sent S1:", itemName)
     end
 
-    if DEBUG then
-        print("[AUTO-BUY WEBHOOK] Sent:", itemName)
-    end
-
-    return true
+    return ok1
 end
 
 --==================================================
@@ -3026,14 +3046,19 @@ local function inspectListing(
                 tierName
             )
 
-        local boosted = boostedCandidate and isUnderrap
+       local boosted = boostedCandidate and isUnderrap
+
+    -- Cek AUTO_BUY_LIST lebih awal biar bisa skip sales history
+    local inAutoBuyList = AUTO_BUY_LIST[itemName] ~= nil
+        or AUTO_BUY_LIST[rapKey] ~= nil
 
     --==================================================
-    -- SALES HISTORY (TAMBAHAN) - diambil lebih awal
+    -- SALES HISTORY — SKIP kalau item ada di AUTO_BUY_LIST
+    -- (biar auto-buy gak delay 1-3 detik)
     --==================================================
 
     local salesHistory
-    if (isUnderrap or isNuke) and not boosted then
+    if (isUnderrap or isNuke) and not boosted and not inAutoBuyList then
         salesHistory = getSalesHistory(
             itemType,
             rapKey
@@ -3057,7 +3082,9 @@ local function inspectListing(
     --==================================================
     -- DYNAMIC BOOSTED DETECTION (TAMBAHAN)
     --==================================================
-        if not boosted and isUnderrap and DYNAMIC_BOOSTED_ENABLED then
+    if not boosted and isUnderrap and DYNAMIC_BOOSTED_ENABLED
+        and rap <= 50000 and not inAutoBuyList
+    then
         local isDynamicBoosted = false
         local boostReason = ""
 
@@ -3219,12 +3246,14 @@ end
 -- SERVER API
 --==================================================
 
+--==================================================
+-- SERVER API (versi lama)
+--==================================================
+
 local function getNewServerOnce()
 
     if not REQUEST then
-        warn(
-            "[SERVER HOP] Request function tidak tersedia."
-        )
+        warn("[SERVER HOP] Request function tidak tersedia.")
         return nil
     end
 
@@ -3307,6 +3336,7 @@ local function getNewServerOnce()
             end
         end
 
+        -- NOTE: pakai data.nextPageCursor (top-level), bukan data.data.nextPageCursor
         cursor = data.nextPageCursor
     until not cursor or pagesRead >= SERVER_API_MAX_PAGES
 
@@ -3314,20 +3344,14 @@ local function getNewServerOnce()
 
     if #preferredServers > 0 then
         pool = preferredServers
-        print(
-            "[SERVER HOP] Prioritas: random server 10-25 player"
-        )
+        print("[SERVER HOP] Prioritas: random server 10-25 player")
     elseif #fallbackServers > 0 then
         pool = fallbackServers
-        print(
-            "[SERVER HOP] Pool 10-25 kosong; fallback random server 5-9 player"
-        )
+        print("[SERVER HOP] Pool 10-25 kosong; fallback random server 5-9 player")
     end
 
     if not pool or #pool == 0 then
-        warn(
-            "[SERVER HOP] Tidak ada server yang tersedia."
-        )
+        warn("[SERVER HOP] Tidak ada server yang tersedia.")
         return nil
     end
 
@@ -3389,8 +3413,6 @@ end
 -- TELEPORT FAILED HANDLER
 --==================================================
 
-local serverHop
-
 TeleportService.TeleportInitFailed:Connect(
     function(
         player,
@@ -3440,11 +3462,7 @@ TeleportService.TeleportInitFailed:Connect(
 serverHop = function(serverId)
 
     if not ENABLE_SERVER_HOP then
-
-        print(
-            "[Server Hop] Disabled."
-        )
-
+        print("[Server Hop] Disabled.")
         return
     end
 
@@ -3454,86 +3472,49 @@ serverHop = function(serverId)
     end
 
     if not serverId and not canDoServerHop() then
-        print(
-            "[Server Hop] Cooldown aktif; menunggu server hop berikutnya."
-        )
+        print("[Server Hop] Cooldown aktif; menunggu server hop berikutnya.")
         return
     end
 
     hopInProgress = true
 
-    print(
-        "======================================"
-    )
-
-    print(
-        "[Server Hop] Semua webhook sudah dikirim."
-    )
-
-    task.wait(5)   -- <-- tambahkan jeda 5 detik
-
+    print("======================================")
+    print("[Server Hop] Semua webhook sudah dikirim.")
+    -- Tunggu pending S2 task.delay biar sempat jalan sebelum teleport
+    print(string.format("[Server Hop] Tunggu %d detik biar S2 webhook kelar dulu...", SECOND_WEBHOOK_DELAY + 2))
+    task.wait(SECOND_WEBHOOK_DELAY + 2)
     if not serverId then
-        print(
-            "[Server Hop] Menunggu "
-            .. tostring(
-                SERVER_HOP_DELAY_SECONDS
-            )
-            .. " detik..."
-        )
+        print("[Server Hop] Menunggu " .. tostring(SERVER_HOP_DELAY_SECONDS) .. " detik...")
     end
-
-    print(
-        "======================================"
-    )
+    print("======================================")
 
     if not serverId then
-        task.wait(
-            SERVER_HOP_DELAY_SECONDS
-        )
-
+        task.wait(SERVER_HOP_DELAY_SECONDS)
         serverId = getNewServer()
     else
-        print(
-            "[Server Hop] Target sudah disiapkan saat webhook phase."
-        )
+        print("[Server Hop] Target sudah disiapkan saat webhook phase.")
     end
 
     if not serverId then
         hopInProgress = false
-        warn(
-            "[Server Hop] Tidak menemukan server baru."
-        )
-
-        task.delay(
-            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
-            function()
-                if not hopInProgress then
-                    serverHop()
-                end
-            end
-        )
-
+        warn("[Server Hop] Tidak menemukan server baru.")
+        task.delay(SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS, function()
+            if not hopInProgress then serverHop() end
+        end)
         return
     end
 
     lastServerHopAt = os.clock()
 
-    print(
-        "[Server Hop] Teleport ke:",
-        tostring(serverId)
-    )
+    print("[Server Hop] Teleport ke:", tostring(serverId))
 
-    local success, result =
-        pcall(function()
-
-            TeleportService:
-                TeleportToPlaceInstance(
-                    game.PlaceId,
-                    serverId,
-                    LocalPlayer
-                )
-
-        end)
+    local success, result = pcall(function()
+        TeleportService:TeleportToPlaceInstance(
+            game.PlaceId,
+            serverId,
+            LocalPlayer
+        )
+    end)
 
     if not success then
         hopInProgress = false
@@ -3547,32 +3528,17 @@ serverHop = function(serverId)
         hopAttemptCount += 1
         if hopAttemptCount > SAFE_SERVER_HOP_RETRY_LIMIT then
             hopAttemptCount = 0
-            warn(
-                "[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya."
-            )
+            warn("[SERVER HOP] Batas retry teleport tercapai; menunggu siklus berikutnya.")
             return
         end
 
-        warn(
-            "[Server Hop] Teleport gagal:",
-            tostring(result)
-        )
+        warn("[Server Hop] Teleport gagal:", tostring(result))
 
-        task.delay(
-            SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS,
-            function()
-                if not hopInProgress then
-                    serverHop()
-                end
-            end
-        )
-
+        task.delay(SERVER_HOP_FAILURE_RETRY_DELAY_SECONDS, function()
+            if not hopInProgress then serverHop() end
+        end)
     else
-
-        print(
-            "[Server Hop] Teleport request berhasil."
-        )
-
+        print("[Server Hop] Teleport request berhasil.")
     end
 end
 
@@ -3700,154 +3666,43 @@ local function scan()
 -- AUTO-BUY (TAMBAHAN)
 --==================================================
 
+--==================================================
+-- AUTO-BUY (verbose logging)
+--==================================================
 if AUTO_BUY_ENABLED then
-    -- SKIP ITEM BOOSTED
-    if result.boosted then
-        if DEBUG then
-            print("[AUTO-BUY] Skip boosted item:", result.itemName)
-        end
-    else
-        local shouldBuy = false
-        local maxPrice = nil
-
-        -- ============================================
-        -- 1. LOOKUP AUTO_BUY_LIST (CASE-INSENSITIVE)
-        -- ============================================
-        local autoBuyMaxPrice = nil
-        if AUTO_BUY_LIST[result.itemName] then
-            autoBuyMaxPrice = AUTO_BUY_LIST[result.itemName]
-        else
-            -- Coba lookup tanpa peduli besar-kecil huruf
-            local normalized = normalizeItemName(result.itemName)
-            for k, v in pairs(AUTO_BUY_LIST) do
-                if normalizeItemName(k) == normalized then
-                    autoBuyMaxPrice = v
-                    break
-                end
+    -- Lookup case-insensitive: coba itemName dulu, fallback ke rapKey
+    local maxPrice
+    if result.itemName then
+        for listName, listPrice in pairs(AUTO_BUY_LIST) do
+            if string.lower(listName) == string.lower(result.itemName) then
+                maxPrice = listPrice
+                break
             end
         end
+    end
+    if not maxPrice and result.rapKey then
+        for listName, listPrice in pairs(AUTO_BUY_LIST) do
+            if string.lower(listName) == string.lower(result.rapKey) then
+                maxPrice = listPrice
+                break
+            end
+        end
+    end
 
-        if autoBuyMaxPrice then
-            -- PRIORITAS: item ada di AUTO_BUY_LIST
-            -- → WAJIB ikuti batas harga dari list
-            -- → JANGAN jatuh ke rule 50% meski diskonnya besar
-            maxPrice = autoBuyMaxPrice
-            shouldBuy = (result.price <= maxPrice)
-
-            if DEBUG then
-                print(
-                    "[AUTO-BUY] Item di list:",
-                    result.itemName,
-                    "| Harga:", result.price,
-                    "| Max list:", maxPrice,
-                    "| Beli:", shouldBuy
+    if maxPrice then
+        print(string.format("[AUTO-BUY] 🎯 MATCH LIST: %s | price: %d | max: %d",
+            result.itemName, result.price, maxPrice))
+        local success = attemptPurchase(
+            ownerId, listingId,
+            result.itemName, result.price, maxPrice
+        )
+        if success then
+            pcall(function()
+                sendAutoBuyWebhook(
+                    result.itemName, result.itemType, result.itemKey,
+                    result.price, result.rap, result.profit, result.discount, ownerId
                 )
-            end
-        else
-            -- ============================================
-            -- 2. FALLBACK RULE (untuk item yang TIDAK di list)
-            -- ============================================
-
-            local salesHistory = result.salesHistory
-            local hasValidSales = salesHistory
-                and salesHistory.daysAboveThreshold
-                and salesHistory.daysAboveThreshold >= AUTO_BUY_MIN_DAYS_WITH_SALES
-
-                    local avgRap = salesHistory and salesHistory.averageRap or nil
-
-        -- Hanya skip kalau RAP JAUH di atas avg (sama seperti dynamic boosted threshold)
-        local rapFarAboveAvg = false
-        if avgRap then
-            if result.rap > avgRap * DYNAMIC_BOOSTED_RAP_RATIO then
-                rapFarAboveAvg = true
-            elseif (result.rap - avgRap) >= DYNAMIC_BOOSTED_RAP_DIFF then
-                rapFarAboveAvg = true
-            end
-        end
-
-        -- Kalau RAP jauh di atas rata-rata → skip
-        if rapFarAboveAvg then
-            if DEBUG then
-                print(
-                    "[AUTO-BUY] Skip (RAP jauh > avg):",
-                    result.itemName,
-                    "| RAP:", result.rap,
-                    "| Avg:", avgRap,
-                    "| Ratio:", result.rap / avgRap,
-                    "| Diff:", result.rap - avgRap
-                )
-            end
-        elseif hasValidSales then
-                -- Rule A: under 100 (RAP < 1500 dan selisih >= 100)
-                if result.rap < 1300 and (result.rap - result.price) >= 100 then
-                    shouldBuy = true
-                    maxPrice = result.price
-                end
-
-                -- Rule B: under 50%
-                -- SYARAT TAMBAHAN:
-                --   - RAP <= 10000 (di atas itu jangan lewat rule 50%)
-                --   - RAP tidak di atas avg (sudah dicek di atas)
-                if not shouldBuy
-                    and result.rap <= 10000
-                    and result.price <= result.rap * 0.5
-                then
-                    shouldBuy = true
-                    maxPrice = result.price
-                end
-
-                -- ============================================
-                -- Rule C (BARU): Sword RAP < 700, selisih >= 60 RAP
-                -- ============================================
-                if not shouldBuy
-                    and result.rap < LOW_RAP_THRESHOLD
-                    and (result.rap - result.price) >= LOW_RAP_MIN_DIFF
-                then
-                    shouldBuy = true
-                    maxPrice = result.price
-
-                    if DEBUG then
-                        print(
-                            "[AUTO-BUY] Rule C match:",
-                            result.itemName,
-                            "| RAP:", result.rap,
-                            "| Harga:", result.price,
-                            "| Selisih:", result.rap - result.price
-                        )
-                    end
-                end
-
-            end
-        end
-
-        -- ============================================
-        -- EKSEKUSI PEMBELIAN
-        -- ============================================
-        if shouldBuy then
-            local success = attemptPurchase(
-                ownerId,
-                listingId,
-                result.itemName,
-                result.price,
-                maxPrice
-            )
-            if success then
-                local ok, err = pcall(function()
-                    sendAutoBuyWebhook(
-                        result.itemName,
-                        result.itemType,
-                        result.itemKey,
-                        result.price,
-                        result.rap,
-                        result.profit,
-                        result.discount,
-                        ownerId
-                    )
-                end)
-                if not ok then
-                    warn("[AUTO-BUY WEBHOOK] ❌ Error:", tostring(err))
-                end
-            end
+            end)
         end
     end
 end
@@ -3892,7 +3747,7 @@ end
         end)
     end
 
-    local webhookCount = 0
+        local webhookCount = 0
 
     for ownerId, listings
         in pairs(groupedListings) do
@@ -3905,7 +3760,7 @@ end
             end
 
             --==========================================
-            -- NUKE
+            -- 1. NUKE (paling prioritas)
             --==========================================
 
             if listing.nuke then
@@ -3931,10 +3786,12 @@ end
             end
 
             --==========================================
-            -- BOOSTED
+            -- 2. DEEP UNDERRAP (>= 50%)
             --==========================================
 
-            if listing.boosted then
+            if listing.deepUnderrap
+                and not listing.nuke
+                and not listing.boosted then
 
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
@@ -3942,7 +3799,7 @@ end
 
                 local sent =
                     sendWebhook(
-                        "BOOSTED",
+                        "DEEP_UNDERRAP",
                         ownerId,
                         listing
                     )
@@ -3957,7 +3814,7 @@ end
             end
 
             --==========================================
-            -- NORMAL UNDERRAP
+            -- 3. NORMAL UNDERRAP (LOW / MID / HIGH / 100K+)
             --==========================================
 
             if listing.price < listing.rap
@@ -3966,20 +3823,11 @@ end
                         listing.tierName
                     )
                 and not listing.boosted
-                and not listing.nuke then
+                and not listing.nuke
+                and not listing.deepUnderrap then
 
-                local webhookType
-
-                if listing.deepUnderrap then
-
-                    webhookType =
-                        "DEEP_UNDERRAP"
-
-                else
-
-                    webhookType =
-                        listing.tierName
-                end
+                local webhookType =
+                    listing.tierName
 
                 if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
                     break
@@ -3988,6 +3836,32 @@ end
                 local sent =
                     sendWebhook(
                         webhookType,
+                        ownerId,
+                        listing
+                    )
+
+                if sent then
+                    webhookCount += 1
+                end
+
+                task.wait(
+                    WEBHOOK_DELAY_SECONDS
+                )
+            end
+
+            --==========================================
+            -- 4. BOOSTED (terakhir)
+            --==========================================
+
+            if listing.boosted then
+
+                if SAFE_MODE and webhookCount >= SAFE_MAX_WEBHOOKS_PER_SCAN then
+                    break
+                end
+
+                local sent =
+                    sendWebhook(
+                        "BOOSTED",
                         ownerId,
                         listing
                     )
@@ -4068,6 +3942,4 @@ end
 -- RUN
 --==================================================
 
-scan()print("[Scanner] Menunggu " .. STARTUP_DELAY_SECONDS .. " detik sebelum memulai scan...")
-task.wait(STARTUP_DELAY_SECONDS)
 scan()
