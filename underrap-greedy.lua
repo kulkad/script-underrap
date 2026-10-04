@@ -299,14 +299,6 @@ local MIN_SALES_COUNT = 20
 local AUTO_BUY_MIN_DAYS_WITH_SALES = 2          -- minimal berapa hari yang mencapai target
 local AUTO_BUY_MIN_DAILY_SALES = 30             -- target penjualan per hari
 
--- Dynamic boosted detection (untuk deteksi item yang RAP-nya dimanipulasi)
-
--- Dynamic boosted detection (untuk deteksi item yang RAP-nya dimanipulasi)
-local DYNAMIC_BOOSTED_ENABLED = true
-local DYNAMIC_BOOSTED_RAP_RATIO = 1.5          -- RAP > avg * rasio ini = boosted
-local DYNAMIC_BOOSTED_RAP_DIFF = 300           -- BARU: RAP - avg >= selisih ini = boosted
-local DYNAMIC_BOOSTED_MIN_TOTAL_SALES = 30     -- total sales di bawah ini dianggap mencurigakan
-
 --==================================================
 -- WEBHOOK DELAY CONFIG
 --==================================================
@@ -3076,60 +3068,6 @@ local function inspectListing(
                 )
             end
             return
-        end
-    end
-
-    --==================================================
-    -- DYNAMIC BOOSTED DETECTION (TAMBAHAN)
-    --==================================================
-    if not boosted and isUnderrap and DYNAMIC_BOOSTED_ENABLED
-        and rap <= 50000 and not inAutoBuyList
-    then
-        local isDynamicBoosted = false
-        local boostReason = ""
-
-        if not salesHistory then
-            -- Tidak ada data sales → dianggap boosted
-            isDynamicBoosted = true
-            boostReason = "no sales history"
-        else
-            local avgRap = salesHistory.averageRap
-            local totalSales = salesHistory.totalSales
-
-            if avgRap and totalSales then
-                -- Cek 1: rasio (RAP naik > 50% dari avg)
-                if rap > avgRap * DYNAMIC_BOOSTED_RAP_RATIO then
-                    isDynamicBoosted = true
-                    boostReason = string.format(
-                        "ratio %.2fx (avg %d)",
-                        rap / avgRap, avgRap
-                    )
-                -- Cek 2: selisih absolut (RAP - avg >= threshold)
-                elseif (rap - avgRap) >= DYNAMIC_BOOSTED_RAP_DIFF then
-                    isDynamicBoosted = true
-                    boostReason = string.format(
-                        "diff +%d (avg %d)",
-                        rap - avgRap, avgRap
-                    )
-                -- Cek 3: total sales rendah
-                elseif totalSales < DYNAMIC_BOOSTED_MIN_TOTAL_SALES then
-                    isDynamicBoosted = true
-                    boostReason = string.format(
-                        "low total sales (%d)",
-                        totalSales
-                    )
-                end
-            end
-        end
-
-        if isDynamicBoosted then
-            boosted = true
-            print(
-                "[DYNAMIC BOOSTED]",
-                itemName,
-                "| RAP:", rap,
-                "| Reason:", boostReason
-            )
         end
     end
 
