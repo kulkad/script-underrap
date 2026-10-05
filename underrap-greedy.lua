@@ -2590,7 +2590,10 @@ local function sendWebhook(webhookType, ownerId, listing)
         { name = "Difference", value = "🔻 " .. diffText, inline = true },
 
         -- ============ BOTTOM SECTION (non-inline) ============
-        { name = "🚀 Click to Join Server", value = "[Click Here to Join](https://www.roblox.com/games/start?placeId=" .. tostring(game.PlaceId) .. "&gameInstanceId=" .. tostring(game.JobId) .. ")", inline = false },
+        { name = "🚀 Click to Join Server",
+          value = "[Click Here to Join](https://www.roblox.com/games/start?placeId=" .. tostring(game.PlaceId) .. "&gameInstanceId=" .. tostring(game.JobId) .. ")",
+          inline = false },
+
         { name = "Booth Claimed", value = boothText, inline = false },
     }
 
