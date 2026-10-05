@@ -1569,7 +1569,7 @@ end
 
 local function getServerLink()
     return string.format(
-        "roblox://placeId=%s&gameInstanceId=%s",
+        "https://www.roblox.com/games/start?placeId=%s&gameInstanceId=%s",
         tostring(game.PlaceId),
         tostring(game.JobId)
     )
@@ -2550,12 +2550,13 @@ local function sendWebhook(webhookType, ownerId, listing)
     if details.hasMount then table.insert(tags, "Mount") end
     if details.isDual then table.insert(tags, "Dual") end
 
+    -- Item name TANPA type (dipisah jadi field sendiri)
     local itemDisplay = "**" .. tostring(listing.itemName) .. "**"
+
+    -- Type field (Sword / Emote / Explosion) + tag Dual/Finisher/Mount
+    local typeDisplay = tostring(listing.itemType or "Unknown")
     if #tags > 0 then
-        itemDisplay = itemDisplay .. " **(" .. table.concat(tags, ", ") .. ")**"
-    end
-    if listing.itemType then
-        itemDisplay = itemDisplay .. "\n**(" .. tostring(listing.itemType) .. ")**"
+        typeDisplay = typeDisplay .. " (" .. table.concat(tags, ", ") .. ")"
     end
 
     local boothText
@@ -2573,29 +2574,24 @@ local function sendWebhook(webhookType, ownerId, listing)
     local diffText = string.format("%s (%.0f%%)",
         formatNumber(listing.profit), listing.discount)
 
-    local serverShort = string.format("roblox://placeId=%s&gameInstanceId=%s",
-        tostring(game.PlaceId), tostring(game.JobId))
+    local serverShort = string.format(
+        "https://www.roblox.com/games/start?placeId=%s&gameInstanceId=%s",
+        tostring(game.PlaceId),
+        tostring(game.JobId)
+    )
 
-    local classification
-    if webhookType == "NUKE" then
-        classification = "☢️ NUKE"
-    elseif webhookType == "BOOSTED" then
-        classification = "⚡ BOOSTED"
-    elseif webhookType == "DEEP_UNDERRAP" then
-        classification = "🔥 DEEP UNDERRAP"
-    else
-        classification = "<:token:1551478922242162708> " .. tostring(webhookType)
-    end
-
-    local fields = {
+        local fields = {
+        -- ============ TOP ROW (inline) ============
         { name = "Seller", value = tostring(ownerInfo.displayName) .. " (`" .. tostring(ownerId) .. "`)", inline = true },
         { name = "Item Name", value = itemDisplay, inline = true },
-        { name = "Price", value = "<:token:1551478922242162708> " .. formatNumber(listing.price), inline = true },
+        { name = "Type", value = typeDisplay, inline = true },
         { name = "Current RAP", value = "📊 " .. formatNumber(listing.rap), inline = true },
+        { name = "Price", value = "<:token:1551478922242162708> " .. formatNumber(listing.price), inline = true },
         { name = "Difference", value = "🔻 " .. diffText, inline = true },
-        { name = "Booth", value = boothText, inline = true },
-        { name = "Server", value = serverShort, inline = false },
-        { name = "Classification", value = classification, inline = false },
+
+        -- ============ BOTTOM SECTION (non-inline) ============
+        { name = "🚀 Click to Join Server", value = "[Click Here to Join](https://www.roblox.com/games/start?placeId=" .. tostring(game.PlaceId) .. "&gameInstanceId=" .. tostring(game.JobId) .. ")", inline = false },
+        { name = "Booth Claimed", value = boothText, inline = false },
     }
 
     if listing.salesHistory then
