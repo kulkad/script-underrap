@@ -2573,8 +2573,8 @@ local function sendWebhook(webhookType, ownerId, listing)
         formatNumber(listing.profit), listing.discount)
 
         -- URL web Roblox — Discord auto-detect sebagai clickable link
-    local serverShort = string.format(
-        "https://www.roblox.com/games/start?placeId=%s&gameInstanceId=%s",
+     local serverShort = string.format(
+        "roblox://placeId=%s&gameInstanceId=%s",
         tostring(game.PlaceId), tostring(game.JobId)
     )
 
@@ -2585,7 +2585,7 @@ local function sendWebhook(webhookType, ownerId, listing)
         { name = "Current RAP", value = "📊 " .. formatNumber(listing.rap), inline = true },
         { name = "Profit", value = "🔻 " .. diffText, inline = true },
         { name = "Booth Claimed", value = boothText, inline = true },
-        { name = "🚀 Click to Join Server", value = serverShort, inline = true },
+        { name = "Link Server", value = serverShort, inline = false },
     }
 
     if listing.salesHistory then
