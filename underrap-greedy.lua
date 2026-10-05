@@ -352,6 +352,7 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
     ["Tidewither"] = true,
+    ["Gothic Heartpiercer"] = true,
     ["Zephyr Blade"] = true,
     ["Super Bow"] = true,
     ["Wavelight Greatblade"] = true,
