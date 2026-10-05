@@ -2603,7 +2603,7 @@ local function sendWebhook(webhookType, ownerId, listing)
     end
 
     local embed = {
-        title = "🔷 Under RAP Scanner",
+        title = "🚨 Under RAP Scanner",
         color = getTierColor(webhookType),
         fields = fields,
         timestamp = DateTime.now():ToIsoDate(),
