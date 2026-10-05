@@ -1569,7 +1569,7 @@ end
 
 local function getServerLink()
     return string.format(
-        "https://www.roblox.com/games/start?placeId=%s&gameInstanceId=%s",
+        "roblox://placeId=%s&gameInstanceId=%s",
         tostring(game.PlaceId),
         tostring(game.JobId)
     )
@@ -2548,15 +2548,13 @@ local function sendWebhook(webhookType, ownerId, listing)
     local tags = {}
     if details.isFinisher then table.insert(tags, "Finisher") end
     if details.hasMount then table.insert(tags, "Mount") end
-    if details.isDual then table.insert(tags, "Dual") end
 
-    -- Item name TANPA type (dipisah jadi field sendiri)
     local itemDisplay = "**" .. tostring(listing.itemName) .. "**"
-
-    -- Type field (Sword / Emote / Explosion) + tag Dual/Finisher/Mount
-    local typeDisplay = tostring(listing.itemType or "Unknown")
     if #tags > 0 then
-        typeDisplay = typeDisplay .. " (" .. table.concat(tags, ", ") .. ")"
+        itemDisplay = itemDisplay .. " **(" .. table.concat(tags, ", ") .. ")**"
+    end
+    if listing.itemType then
+        itemDisplay = itemDisplay .. "\n**(" .. tostring(listing.itemType) .. ")**"
     end
 
     local boothText
@@ -2574,27 +2572,20 @@ local function sendWebhook(webhookType, ownerId, listing)
     local diffText = string.format("%s (%.0f%%)",
         formatNumber(listing.profit), listing.discount)
 
+        -- URL web Roblox — Discord auto-detect sebagai clickable link
     local serverShort = string.format(
         "https://www.roblox.com/games/start?placeId=%s&gameInstanceId=%s",
-        tostring(game.PlaceId),
-        tostring(game.JobId)
+        tostring(game.PlaceId), tostring(game.JobId)
     )
 
-        local fields = {
-        -- ============ TOP ROW (inline) ============
-        { name = "Seller", value = tostring(ownerInfo.displayName) .. " (`" .. tostring(ownerId) .. "`)", inline = true },
+    local fields = {
+        { name = "Seller", value = tostring(ownerInfo.displayName) .. "\n( " .. tostring(ownerId) .. " )", inline = true },
         { name = "Item Name", value = itemDisplay, inline = true },
-        { name = "Type", value = typeDisplay, inline = true },
-        { name = "Current RAP", value = "📊 " .. formatNumber(listing.rap), inline = true },
         { name = "Price", value = "<:token:1551478922242162708> " .. formatNumber(listing.price), inline = true },
-        { name = "Difference", value = "🔻 " .. diffText, inline = true },
-
-        -- ============ BOTTOM SECTION (non-inline) ============
-        { name = "🚀 Click to Join Server",
-          value = "[Click Here to Join](https://www.roblox.com/games/start?placeId=" .. tostring(game.PlaceId) .. "&gameInstanceId=" .. tostring(game.JobId) .. ")",
-          inline = false },
-
-        { name = "Booth Claimed", value = boothText, inline = false },
+        { name = "Current RAP", value = "📊 " .. formatNumber(listing.rap), inline = true },
+        { name = "Profit", value = "🔻 " .. diffText, inline = true },
+        { name = "Booth Claimed", value = boothText, inline = true },
+        { name = "🚀 Click to Join Server", value = serverShort, inline = true },
     }
 
     if listing.salesHistory then
@@ -2608,7 +2599,7 @@ local function sendWebhook(webhookType, ownerId, listing)
     end
 
     if ownerProfileUrl then
-        table.insert(fields, { name = "Profile", value = ownerProfileUrl, inline = false })
+        table.insert(fields, { name = "Seller Profile", value = ownerProfileUrl, inline = false })
     end
 
     local embed = {
