@@ -133,10 +133,12 @@ local AUTO_BUY_LIST = {
     ["Snowball Launcher"] = 3200,
     ["Floppy Chicken"] = 3200,
     ["Sitting"] = 2400,
+    ["Look At Me!"] = 1000,
     ["Shackled Celestial"] = 500,
     ["Moonflower Greatsword"] = 3200,
     ["Strawberry Cake Blade"] = 290,
     ["Star Wand"] = 2900,
+    ["Crystal Dual Sword Swing"] = 700,
     ["Queen Blade"] = 27500,
     ["Meowstruck"] = 1400,
     ["Red Moon Katana"] = 2900,
@@ -192,6 +194,7 @@ local AUTO_BUY_LIST = {
     ["Proyection Sorcery Katana"] = 3400,
     ["Hellwing Set"] = 4100,
     ["Halberd"] = 3900,
+    ["Paw Punch"] = 5500,
     ["Gyaru Katana"] = 4300,
     ["Guardian of the underworld"] = 3700,
     ["Devil Greatsword"] = 3900,
@@ -217,6 +220,7 @@ local AUTO_BUY_LIST = {
     ["Chroma Blade"] = 14500,
     ["King Blade"] = 12000,
     ["Puppy"] = 16000,
+    ["Pink Ninja Katana"] = 6500,
     ["Flaming Sword"] = 3000,
     ["Pillow"] = 2500,
     ["Royal Duality"] = 50000,
@@ -238,7 +242,7 @@ local AUTO_BUY_LIST = {
     ["Aligned Constellation"] = 4000,
     ["Dancinha"] = 3000,
     ["Riftflare Katana"] = 2900,
-    ["Fox Katana"] = 5200,
+    ["Fox Katana"] = 5300,
     ["Milk & Cookies"] = 3000,
     ["Kraken"] = 7000,
     ["Sakura's Requiem"] = 3800,
@@ -287,7 +291,6 @@ local AUTO_BUY_LIST = {
     ["Lumen Petal"] = 300,
     ["Rosarium Blade"] = 380,
     ["Rose Blade"] = 530,
-    ["Cursed Obsession"] = 4400,
 }
 
 --==================================================
@@ -305,6 +308,8 @@ local AUTO_BUY_MIN_DAILY_SALES = 30             -- target penjualan per hari
 -- WEBHOOK DELAY CONFIG
 --==================================================
 local SECOND_WEBHOOK_DELAY = 7  -- detik (recommended 10-15)
+local ENABLE_SERVER2_WEBHOOK = true  -- ⬅️ ubah ke true kalau mau aktifkan Server 2
+local ENABLE_SERVER2_HOP_WAIT = true -- ⬅️ true kalau mau nunggu S2 kelar sebelum hop
 
 --==================================================
 -- WEBHOOKS (2 SERVER)
@@ -321,7 +326,7 @@ local WEBHOOKS = {
         DEEP_UNDERRAP = "https://discord.com/api/webhooks/1556250301286322211/w9z4F5MuyxamX9uHtYDFqhckowf37uhJI0nqiyex-UghxMnN9y48vFzjRW0fV7VzHRo7",
         AUTO_BUY = "https://discord.com/api/webhooks/1556250385511882853/egiraUPm5EvO8GrPVUbgD3hvRRpW7_xPxu2vatqDVgyg8MvDSrQoZvi5n9yLLPXb_8Qf",
     },
-    -- SERVER 2 (kode kirim setelah delay)
+    -- SERVER 2 (kode kirim setelah delay) — DISABLED
     SERVER2 = {
         LOW = "https://discord.com/api/webhooks/1551501843773784134/B_TyApwNmK70RXS3_hUtjqjPYwWU2y9ZzogQ5Hhen-mvg0OI0tFqgp6C-vKxv3FwWjjA",
         MID = "https://discord.com/api/webhooks/1551501902498500702/sbF6owgb1-i-cRYUhOajnKjlb-etcTUDBoI_MmrAGzTaLYp2dESb5BZGNRhgWtkErGkD",
@@ -352,7 +357,12 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
     ["Tidewither"] = true,
+    ["Ether Blade"] = true,
+    ["Frosted Cards"] = true,
+    ["Ferocitus' Awakening"] = true,
+    ["Soulbloom Blade"] = true,
     ["Beach Relax"] = true,
+    ["Winter Warrior"] = true,
     ["Gothic Heartpiercer Bow"] = true,
     ["Zephyr Blade"] = true,
     ["Super Bow"] = true,
@@ -2582,8 +2592,7 @@ local function sendWebhook(webhookType, ownerId, listing)
     local diffText = string.format("%s (%.0f%%)",
         formatNumber(listing.profit), listing.discount)
 
-        -- URL web Roblox — Discord auto-detect sebagai clickable link
-     local serverShort = string.format(
+    local serverShort = string.format(
         "roblox://placeId=%s&gameInstanceId=%s",
         tostring(game.PlaceId), tostring(game.JobId)
     )
@@ -2640,8 +2649,10 @@ local function sendWebhook(webhookType, ownerId, listing)
     -- ====== KIRIM KE SERVER 1 (LANGSUNG) ======
     local ok1 = sendOneWebhook(server1Url, payload, "SERVER1/" .. tostring(webhookType), listing.itemName)
 
-    -- ====== KIRIM KE SERVER 2 (DELAY) ======
-    if server2Url and server2Url ~= "" and not string.find(server2Url, "PASTE_") then
+        -- ====== KIRIM KE SERVER 2 (DELAY) ======
+    if ENABLE_SERVER2_WEBHOOK
+        and server2Url and server2Url ~= ""
+        and not string.find(server2Url, "PASTE_") then
         local itemLabel = listing.itemName
         local wt = webhookType
 
@@ -2762,7 +2773,9 @@ local function sendAutoBuyWebhook(itemName, itemType, itemKey, price, rap, profi
     local ok1 = sendOneWebhook(server1Url, payload, "SERVER1/AUTO_BUY", itemName)
 
     -- ====== KIRIM KE SERVER 2 (DELAY) ======
-    if server2Url and server2Url ~= "" and not string.find(server2Url, "PASTE_") then
+        if ENABLE_SERVER2_WEBHOOK
+        and server2Url and server2Url ~= ""
+        and not string.find(server2Url, "PASTE_") then
         local itemLabel = itemName
         task.delay(SECOND_WEBHOOK_DELAY, function()
             pcall(function()
@@ -3067,24 +3080,30 @@ local function inspectListing(
     --==================================================
 
     local salesHistory
-    if (isUnderrap or isNuke) and not boosted and not inAutoBuyList then
-        salesHistory = getSalesHistory(
-            itemType,
-            rapKey
-        )
+    local pendingSalesHistory = false   -- <-- TAMBAHAN
+    if (isUnderrap or isNuke) and not boosted then
+        if inAutoBuyList then
+            -- Item ada di AUTO_BUY_LIST: SKIP blocking fetch,
+            -- tapi kasih tanda buat fetch belakangan (async)
+            -- biar auto-buy gak delay 1-3 detik.
+            pendingSalesHistory = true
+        else
+            -- Bukan item auto-buy: fetch langsung (butuh buat filter LOW)
+            salesHistory = getSalesHistory(itemType, rapKey)
 
-        if tierName == "LOW"
-            and (not salesHistory
-                or not salesHistory.hasSalesDayOverThreshold) then
-            if DEBUG then
-                warn(
-                    "[LOW SALES FILTER] Skipped:",
-                    itemName,
-                    "no day with sales >",
-                    MIN_SALES_COUNT
-                )
+            if tierName == "LOW"
+                and (not salesHistory
+                    or not salesHistory.hasSalesDayOverThreshold) then
+                if DEBUG then
+                    warn(
+                        "[LOW SALES FILTER] Skipped:",
+                        itemName,
+                        "no day with sales >",
+                        MIN_SALES_COUNT
+                    )
+                end
+                return
             end
-            return
         end
     end
 
@@ -3165,34 +3184,22 @@ local function inspectListing(
 
         return {
             itemName = itemName,
-
-            -- PENTING:
-            -- itemKey tetap internal key.
             itemKey = itemKey,
-
             rapKey = rapKey,
-
             itemType = itemType,
-
             price = price,
             rap = rap,
-
             discount = discount,
             profit = rap - price,
-
             tierName = tierName,
-
             boosted = boosted,
             nuke = isNuke,
-
             nukeLimit = nukeLimit,
-
-            deepUnderrap =
-                isDeepUnderrap,
-
+            deepUnderrap = isDeepUnderrap,
             boothClaimed = boothMetadata.claimed,
             boothLocation = boothMetadata.location,
-            salesHistory = salesHistory,   -- <-- TAMBAHAN
+            salesHistory = salesHistory,
+            pendingSalesHistory = pendingSalesHistory,   -- <-- TAMBAHAN
         }
     end
 end
@@ -3435,9 +3442,10 @@ serverHop = function(serverId)
 
     print("======================================")
     print("[Server Hop] Semua webhook sudah dikirim.")
-    -- Tunggu pending S2 task.delay biar sempat jalan sebelum teleport
-    print(string.format("[Server Hop] Tunggu %d detik biar S2 webhook kelar dulu...", SECOND_WEBHOOK_DELAY + 2))
-    task.wait(SECOND_WEBHOOK_DELAY + 2)
+    if ENABLE_SERVER2_WEBHOOK and ENABLE_SERVER2_HOP_WAIT then
+        print(string.format("[Server Hop] Tunggu %d detik biar S2 webhook kelar dulu...", SECOND_WEBHOOK_DELAY + 2))
+        task.wait(SECOND_WEBHOOK_DELAY + 2)
+    end
     if not serverId then
         print("[Server Hop] Menunggu " .. tostring(SERVER_HOP_DELAY_SECONDS) .. " detik...")
     end
@@ -3660,6 +3668,13 @@ if AUTO_BUY_ENABLED then
             end)
         end
     end
+end
+
+-- ⬇️ TAMBAHKAN BLOK INI ⬇️
+if result.pendingSalesHistory and not result.salesHistory then
+    pcall(function()
+        result.salesHistory = getSalesHistory(result.itemType, result.rapKey)
+    end)
 end
 
                     groupedListings[ownerId] =
