@@ -356,6 +356,7 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
     ["Tidewither"] = true,
+    ["NO BATIDÃO"] = true,
     ["Ether Blade"] = true,
     ["Frosted Cards"] = true,
     ["Ferocitus' Awakening"] = true,
