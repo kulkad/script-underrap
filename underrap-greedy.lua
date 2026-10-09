@@ -158,7 +158,6 @@ local AUTO_BUY_LIST = {
     ["Skeleton Bride"] = 6400,
     ["Black Cat Scythe"] = 900,
     ["Y2K Blade"] = 400,
-    ["Wolf Greatsword"] = 14000,
     ["North Blade"] = 1400,
     ["Dual Chroma set"] = 11200,
     ["Chroma Scythe"] = 7500,
@@ -218,7 +217,7 @@ local AUTO_BUY_LIST = {
     ["Tiger's Katana"] = 12000,
     ["Love For You"] = 14800,
     ["Chroma Blade"] = 14500,
-    ["King Blade"] = 12000,
+    ["King Blade"] = 11500,
     ["Puppy"] = 16000,
     ["Pink Ninja Katana"] = 6500,
     ["Flaming Sword"] = 3000,
@@ -1090,6 +1089,7 @@ local RAPHistoryRequest =
 --==================================================
 local PurchaseRemote
 do
+    -- Method 1: pakai Net wrapper (paling clean)
     local ok, remote = pcall(function()
         return Net:RemoteFunction("PurchaseBoothListing")
     end)
@@ -1097,10 +1097,21 @@ do
         PurchaseRemote = remote
         print("[AUTO-BUY] ✅ PurchaseRemote via Net:RemoteFunction")
     else
+        -- Method 2: fallback cari child langsung di raw net module
+        -- NOTE: nama child di-hash, jadi harus pakai hash yang benar
         local rawNet = ReplicatedStorage.Packages._Index["sleitnick_net@0.1.0"].net
-        PurchaseRemote = rawNet:FindFirstChild("RF/PurchaseBoothListing")
-        if PurchaseRemote then
-            print("[AUTO-BUY] ✅ PurchaseRemote via raw module")
+        local candidates = {
+            "RF/1d1f814219810f62184eda83bcbd465a4904a2003d8d4840e0c26872e0f68392",
+            "RF/PurchaseBoothListing",
+            "PurchaseBoothListing",
+        }
+        for _, name in ipairs(candidates) do
+            local child = rawNet:FindFirstChild(name)
+            if child and child:IsA("RemoteFunction") then
+                PurchaseRemote = child
+                print("[AUTO-BUY] ✅ PurchaseRemote via raw module:", name)
+                break
+            end
         end
     end
 end
@@ -1297,19 +1308,74 @@ local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
     print(string.format("[AUTO-BUY] 🎯 BELI: %s | price: %d | max: %d | seller: %s",
         itemName, price, maxPrice, player.Name))
 
-    local success, result = pcall(function()
-        return BoothController:PurchaseListing(player, listingId)
-    end)
+    -- ============================================
+    -- METHOD 1: BoothController:PurchaseListing
+    -- ============================================
+    do
+        local success, result = pcall(function()
+            return BoothController:PurchaseListing(player, listingId)
+        end)
 
-    -- PENTING: cek `result == true`, bukan cuma `success`
-    if success and result == true then
-        print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
-        return true
+        -- Server bisa return true, atau nil saat sukses.
+        -- Yang penting: pcall sukses DAN bukan error message.
+        if success and (result == true or result == nil) then
+            print("[AUTO-BUY] ✅ BERHASIL (M1) membeli", itemName, "seharga", price)
+            return true
+        end
+
+        warn("[AUTO-BUY] ⚠️ M1 gagal:", itemName,
+            "| success:", tostring(success),
+            "| result:", tostring(result))
     end
 
-    warn("[AUTO-BUY] ❌ GAGAL:", itemName,
-        "| success:", tostring(success),
-        "| result:", tostring(result))
+    -- ============================================
+    -- METHOD 2: InvokeServer langsung ke remote
+    -- { Owner = Player, ListingId = string }
+    -- ============================================
+    if PurchaseRemote then
+        local success, result = pcall(function()
+            return PurchaseRemote:InvokeServer({
+                Owner = player,
+                ListingId = tostring(listingId),
+            })
+        end)
+
+        if success and (result == true or result == nil) then
+            print("[AUTO-BUY] ✅ BERHASIL (M2) membeli", itemName, "seharga", price)
+            return true
+        end
+
+        warn("[AUTO-BUY] ⚠️ M2 gagal:", itemName,
+            "| success:", tostring(success),
+            "| result:", tostring(result))
+    end
+
+    -- ============================================
+    -- METHOD 3: Net:RemoteFunction invoke
+    -- (kalau PurchaseRemote diganti oleh Net wrapper)
+    -- ============================================
+    do
+        local ok, remote = pcall(function()
+            return Net:RemoteFunction("PurchaseBoothListing")
+        end)
+        if ok and remote then
+            local success, result = pcall(function()
+                return remote:InvokeServer({
+                    Owner = player,
+                    ListingId = tostring(listingId),
+                })
+            end)
+            if success and (result == true or result == nil) then
+                print("[AUTO-BUY] ✅ BERHASIL (M3) membeli", itemName, "seharga", price)
+                return true
+            end
+            warn("[AUTO-BUY] ⚠️ M3 gagal:", itemName,
+                "| success:", tostring(success),
+                "| result:", tostring(result))
+        end
+    end
+
+    warn("[AUTO-BUY] ❌ GAGAL semua method:", itemName)
     return false
 end
 
