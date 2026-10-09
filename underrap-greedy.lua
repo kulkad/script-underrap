@@ -88,9 +88,9 @@ local DEBUG = false
 local DUMP_RAW_DATA = false
 
 local SAFE_MODE = true
-local SAFE_SCAN_COOLDOWN_SECONDS = 2
-local SAFE_HOP_COOLDOWN_SECONDS = 3
-local SAFE_MAX_WEBHOOKS_PER_SCAN = 50
+local SAFE_SCAN_COOLDOWN_SECONDS = 10
+local SAFE_HOP_COOLDOWN_SECONDS = 20
+local SAFE_MAX_WEBHOOKS_PER_SCAN = 40
 local SAFE_SERVER_HOP_RETRY_LIMIT = 1
 
 local WEBHOOK_DELAY_SECONDS = 0.3
@@ -372,6 +372,7 @@ local BOOSTED_ITEMS = {
     ["Black Ninja Star"] = true,
     ["Shadow Dragger"] = true,
     ["Titanbreaker"] = true,
+    ["Royal Relic Bow"] = true,
     ["Block Buster"] = true,
     ["Twilight Bite"] = true,
     ["Thronebreaker"] = true,
@@ -1288,94 +1289,66 @@ end
 -- AUTO-BUY (pakai method lama: BoothController:PurchaseListing)
 --==================================================
 
+-- Tracking item yang sering gagal
+local failedItemTracker = {}
+local FAILED_ITEM_LIMIT = 10
+
 local function attemptPurchase(ownerId, listingId, itemName, price, maxPrice)
     if not AUTO_BUY_ENABLED then return false end
-
     if price > maxPrice then
-        print("[AUTO-BUY] ⏭️ Harga terlalu tinggi:", itemName, price, ">", maxPrice)
+        print("[AUTO-BUY] Harga terlalu tinggi:", itemName, price, ">", maxPrice)
         return false
     end
 
-    -- WAJIB pakai Player object. Kalau seller offline, skip.
+    if failedItemTracker[itemName] and failedItemTracker[itemName] >= FAILED_ITEM_LIMIT then
+        print("[AUTO-BUY] Skip item (sering gagal):", itemName)
+        return false
+    end
+
     local numericOwnerId = tonumber(ownerId)
     local player = numericOwnerId and Players:GetPlayerByUserId(numericOwnerId) or nil
+    local ownerArg = player or ownerId
 
-    if not player then
-        warn("[AUTO-BUY] ⏭️ Skip — seller offline (ownerId:", tostring(ownerId), ")")
-        return false
-    end
+    print("[AUTO-BUY] Mencoba beli:", itemName, "owner:", tostring(ownerArg), "listingId:", tostring(listingId))
 
-    print(string.format("[AUTO-BUY] 🎯 BELI: %s | price: %d | max: %d | seller: %s",
-        itemName, price, maxPrice, player.Name))
-
-    -- ============================================
-    -- METHOD 1: BoothController:PurchaseListing
-    -- ============================================
-    do
+    for attempt = 1, 10 do
         local success, result = pcall(function()
-            return BoothController:PurchaseListing(player, listingId)
+            return BoothController:PurchaseListing(ownerArg, listingId)
         end)
 
-        -- Server bisa return true, atau nil saat sukses.
-        -- Yang penting: pcall sukses DAN bukan error message.
-        if success and (result == true or result == nil) then
-            print("[AUTO-BUY] ✅ BERHASIL (M1) membeli", itemName, "seharga", price)
-            return true
-        end
+        local isSuccessful = false
 
-        warn("[AUTO-BUY] ⚠️ M1 gagal:", itemName,
-            "| success:", tostring(success),
-            "| result:", tostring(result))
-    end
-
-    -- ============================================
-    -- METHOD 2: InvokeServer langsung ke remote
-    -- { Owner = Player, ListingId = string }
-    -- ============================================
-    if PurchaseRemote then
-        local success, result = pcall(function()
-            return PurchaseRemote:InvokeServer({
-                Owner = player,
-                ListingId = tostring(listingId),
-            })
-        end)
-
-        if success and (result == true or result == nil) then
-            print("[AUTO-BUY] ✅ BERHASIL (M2) membeli", itemName, "seharga", price)
-            return true
-        end
-
-        warn("[AUTO-BUY] ⚠️ M2 gagal:", itemName,
-            "| success:", tostring(success),
-            "| result:", tostring(result))
-    end
-
-    -- ============================================
-    -- METHOD 3: Net:RemoteFunction invoke
-    -- (kalau PurchaseRemote diganti oleh Net wrapper)
-    -- ============================================
-    do
-        local ok, remote = pcall(function()
-            return Net:RemoteFunction("PurchaseBoothListing")
-        end)
-        if ok and remote then
-            local success, result = pcall(function()
-                return remote:InvokeServer({
-                    Owner = player,
-                    ListingId = tostring(listingId),
-                })
-            end)
-            if success and (result == true or result == nil) then
-                print("[AUTO-BUY] ✅ BERHASIL (M3) membeli", itemName, "seharga", price)
-                return true
+        if success then
+            if typeof(result) == "boolean" then
+                isSuccessful = result
+            elseif typeof(result) == "table" then
+                if result.Success == true or result.success == true
+                    or result.Ok == true or result.ok == true then
+                    isSuccessful = true
+                end
+            elseif result == nil then
+                isSuccessful = true
             end
-            warn("[AUTO-BUY] ⚠️ M3 gagal:", itemName,
-                "| success:", tostring(success),
-                "| result:", tostring(result))
+
+            if isSuccessful then
+                print("[AUTO-BUY] ✅ BERHASIL membeli", itemName, "seharga", price)
+                return true
+            else
+                warn("[AUTO-BUY] ❌ Gagal (server reject) attempt "..attempt.." :", itemName, "| result:", tostring(result))
+                if attempt < 5 then
+                    task.wait(2 * attempt)
+                end
+            end
+        else
+            warn("[AUTO-BUY] ❌ Gagal (error) attempt "..attempt.." :", itemName, tostring(result))
+            if attempt < 10 then
+                task.wait(2 * attempt)
+            end
         end
     end
 
-    warn("[AUTO-BUY] ❌ GAGAL semua method:", itemName)
+    failedItemTracker[itemName] = (failedItemTracker[itemName] or 0) + 1
+    print("[AUTO-BUY] Failed count untuk", itemName, ":", failedItemTracker[itemName])
     return false
 end
 
@@ -3698,8 +3671,8 @@ local function scan()
 --==================================================
 -- AUTO-BUY (verbose logging)
 --==================================================
-if AUTO_BUY_ENABLED then
-    -- Lookup case-insensitive: coba itemName dulu, fallback ke rapKey
+if AUTO_BUY_ENABLED and not result.boosted then
+    -- Lookup AUTO_BUY_LIST (case-insensitive)
     local maxPrice
     if result.itemName then
         for listName, listPrice in pairs(AUTO_BUY_LIST) do
@@ -3721,17 +3694,20 @@ if AUTO_BUY_ENABLED then
     if maxPrice then
         print(string.format("[AUTO-BUY] 🎯 MATCH LIST: %s | price: %d | max: %d",
             result.itemName, result.price, maxPrice))
-        local success = attemptPurchase(
-            ownerId, listingId,
-            result.itemName, result.price, maxPrice
-        )
-        if success then
-            pcall(function()
-                sendAutoBuyWebhook(
-                    result.itemName, result.itemType, result.itemKey,
-                    result.price, result.rap, result.profit, result.discount, ownerId
-                )
-            end)
+
+        if result.price <= maxPrice then
+            local success = attemptPurchase(
+                ownerId, listingId,
+                result.itemName, result.price, maxPrice
+            )
+            if success then
+                pcall(function()
+                    sendAutoBuyWebhook(
+                        result.itemName, result.itemType, result.itemKey,
+                        result.price, result.rap, result.profit, result.discount, ownerId
+                    )
+                end)
+            end
         end
     end
 end
