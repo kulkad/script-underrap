@@ -3696,21 +3696,31 @@ if AUTO_BUY_ENABLED and not result.boosted then
             result.itemName, result.price, maxPrice))
 
         if result.price <= maxPrice then
-            local success = attemptPurchase(
-                ownerId, listingId,
-                result.itemName, result.price, maxPrice
-            )
-            if success then
-                pcall(function()
-                    sendAutoBuyWebhook(
-                        result.itemName, result.itemType, result.itemKey,
-                        result.price, result.rap, result.profit, result.discount, ownerId
-                    )
-                end)
+            -- ⚠️ CEK BOOTH DULU: kalau booth belum di-claim,
+            -- gak bisa auto buy (game update). Cukup kirim webhook aja.
+            if not result.boothClaimed then
+                print(string.format(
+                    "[AUTO-BUY] ⏭️ Skip auto-buy (booth belum claim): %s | seller: %s | loc: %s",
+                    result.itemName, tostring(ownerId), tostring(result.boothLocation)
+                ))
+                -- Webhook tetap dikirim di webhook phase (tier URL)
+                -- Gak perlu kirim AUTO_BUY webhook karena gak ada pembelian
+            else
+                local success = attemptPurchase(
+                    ownerId, listingId,
+                    result.itemName, result.price, maxPrice
+                )
+                if success then
+                    pcall(function()
+                        sendAutoBuyWebhook(
+                            result.itemName, result.itemType, result.itemKey,
+                            result.price, result.rap, result.profit, result.discount, ownerId
+                        )
+                    end)
+                end
             end
         end
     end
-end
 
 -- ⬇️ TAMBAHKAN BLOK INI ⬇️
 if result.pendingSalesHistory and not result.salesHistory then
