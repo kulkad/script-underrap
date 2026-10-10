@@ -115,6 +115,7 @@ local scanInProgress = false
 local hopInProgress = false
 local hopAttemptCount = 0
 local blockedServerIds = {}
+local visitedServers = {}          -- placeholder, di-load nanti
 local lastTeleportTargetId = nil
 local preparedServerId = nil
 -- forward declaration biar bisa dipanggil sebelum di-assign
@@ -356,7 +357,12 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
     ["Tidewither"] = true,
+    ["Aetherial Azure Katana"] = true,
+    ["Titanbreaker Zweilhander"] = true,
     ["NO BATIDÃO"] = true,
+    ["Eclipse Warden"] = true,
+    ["Bloom Shuriken"] = true,
+    ["Ranked Season 4 Top 100 Sword"] = true,
     ["Ether Blade"] = true,
     ["Frosted Cards"] = true,
     ["Ferocitus' Awakening"] = true,
@@ -755,7 +761,6 @@ local BOOSTED_ITEMS = {
     ["Permafrost Flowerblade"] = true,
     ["Permafrost Staff"] = true,
     ["Phantom Blade"] = true,
-    ["NO BATIDÃO"] = true,
     ["Phantom Warrior"] = true,
     ["Plasma Beam Blade"] = true,
     ["Plasma Blasters (Finisher)"] = true,
@@ -3245,12 +3250,50 @@ local function inspectListing(
 end
 
 --==================================================
--- SERVER API
+-- PERSIST VISITED SERVERS (antar hop)
 --==================================================
+local VISITED_KEY = "ApayaVisitedServers"
+
+local function saveVisitedServers()
+    pcall(function()
+        local encoded = HttpService:JSONEncode(visitedServers)
+        TeleportService:SetTeleportSetting(VISITED_KEY, encoded)
+    end)
+end
+
+local function loadVisitedServers()
+    local loaded = {}
+    pcall(function()
+        local encoded = TeleportService:GetTeleportSetting(VISITED_KEY)
+        if encoded and encoded ~= "" then
+            local decoded = HttpService:JSONDecode(encoded)
+            if typeof(decoded) == "table" then
+                loaded = decoded
+            end
+        end
+    end)
+    return loaded
+end
+
+local function clearVisitedServers()
+    visitedServers = {}
+    pcall(function()
+        TeleportService:SetTeleportSetting(VISITED_KEY, "{}")
+    end)
+end
 
 --==================================================
 -- SERVER API (versi lama)
 --==================================================
+
+-- Load visited list dari setting yang persist antar hop
+visitedServers = loadVisitedServers()
+
+print("[Scanner] 📋 Visited servers (loaded):", (function()
+    local n = 0
+    for _ in pairs(visitedServers) do n = n + 1 end
+    return n
+end)())
 
 local function getNewServerOnce()
 
@@ -3317,11 +3360,12 @@ local function getNewServerOnce()
 
         pagesRead += 1
 
-        for _, server in ipairs(data.data) do
+                for _, server in ipairs(data.data) do
             if typeof(server) == "table"
                 and server.id
                 and server.id ~= game.JobId
                 and not blockedServerIds[tostring(server.id)]
+                and not visitedServers[tostring(server.id)]     -- ⬅️ SKIP visited
                 and tonumber(server.playing) ~= nil
                 and tonumber(server.maxPlayers) ~= nil
                 and tonumber(server.playing) < tonumber(server.maxPlayers)
@@ -3350,6 +3394,23 @@ local function getNewServerOnce()
     elseif #fallbackServers > 0 then
         pool = fallbackServers
         print("[SERVER HOP] Pool 10-25 kosong; fallback random server 5-9 player")
+    end
+
+        -- ⬇️ AUTO-RESET: kalau semua server udah pernah dikunjungi,
+    -- reset visited list biar bisa muter lagi (biar gak stuck)
+    if (not pool or #pool == 0) and next(visitedServers) ~= nil then
+        local clearedCount = 0
+        for _ in pairs(visitedServers) do
+            clearedCount = clearedCount + 1
+        end
+
+        print("======================================")
+        print("[SERVER HOP] 🔄 Semua server udah dikunjungi.")
+        print("[SERVER HOP] Reset visited list (" .. clearedCount .. " server) biar bisa muter lagi.")
+        print("======================================")
+
+        clearVisitedServers()   -- ⬅️ pakai helper, biar ke-save ke setting
+        return getNewServerOnce()   -- retry sekali setelah reset
     end
 
     if not pool or #pool == 0 then
@@ -3507,9 +3568,20 @@ serverHop = function(serverId)
         return
     end
 
-    lastServerHopAt = os.clock()
+        lastServerHopAt = os.clock()
+
+    -- ⬇️ MARK VISITED: biar gak balik ke server ini lagi
+    visitedServers[tostring(serverId)] = true
+
+    -- ⬇️ PERSIST ke setting biar gak hilang saat restart setelah teleport
+    saveVisitedServers()
 
     print("[Server Hop] Teleport ke:", tostring(serverId))
+    print("[Server Hop] Total visited:", (function()
+        local n = 0
+        for _ in pairs(visitedServers) do n = n + 1 end
+        return n
+    end)())
 
     local success, result = pcall(function()
         TeleportService:TeleportToPlaceInstance(
@@ -3692,7 +3764,7 @@ if AUTO_BUY_ENABLED and not result.boosted then
         end
     end
 
-    if maxPrice then
+            if maxPrice then
         print(string.format("[AUTO-BUY] 🎯 MATCH LIST: %s | price: %d | max: %d",
             result.itemName, result.price, maxPrice))
 
