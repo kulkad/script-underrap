@@ -195,7 +195,6 @@ local AUTO_BUY_LIST = {
     ["Hellwing Set"] = 4100,
     ["Halberd"] = 3900,
     ["Paw Punch"] = 5500,
-    ["Gyaru Katana"] = 4300,
     ["Guardian of the underworld"] = 3700,
     ["Devil Greatsword"] = 3900,
     ["Frostbound Latern"] = 4300,
@@ -268,7 +267,6 @@ local AUTO_BUY_LIST = {
     ["Montagem Miau"] = 7200,
     ["Legs Kickin'"] = 8300,
     ["Winter Wolf"] = 20000,
-    ["Night Raver"] = 8300,
     ["Dual Leviathan Set"] = 3800,
     ["Gothic Bunny Blade"] = 300,
     ["Watching The Stars"] = 3000,
@@ -357,6 +355,10 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
     ["Tidewither"] = true,
+    ["Eclipse Gleam"] = true,
+    ["Azurethorn Blade"] = true,
+    ["Necrotic Ruler"] = true,
+    ["Phantom Ops"] = true,
     ["Aetherial Azure Katana"] = true,
     ["Titanbreaker Zweilhander"] = true,
     ["NO BATIDÃO"] = true,
@@ -3775,17 +3777,28 @@ if AUTO_BUY_ENABLED and not result.boosted then
                     result.itemName, tostring(ownerId), tostring(result.boothLocation)
                 ))
             else
-                local success = attemptPurchase(
+                                local success = attemptPurchase(
                     ownerId, listingId,
                     result.itemName, result.price, maxPrice
                 )
                 if success then
-                    pcall(function()
-                        sendAutoBuyWebhook(
+                    -- ⬇️ LOG + CATCH ERROR
+                    local webhookOk, webhookErr = pcall(function()
+                        return sendAutoBuyWebhook(
                             result.itemName, result.itemType, result.itemKey,
                             result.price, result.rap, result.profit, result.discount, ownerId
                         )
                     end)
+
+                    if not webhookOk then
+                        warn("[AUTO-BUY WEBHOOK] ❌ ERROR:", tostring(webhookErr))
+                    else
+                        if webhookErr == true then
+                            print("[AUTO-BUY WEBHOOK] ✅ Terkirim:", result.itemName)
+                        else
+                            warn("[AUTO-BUY WEBHOOK] ⚠️ Return false:", result.itemName)
+                        end
+                    end
                 end
             end
         end
