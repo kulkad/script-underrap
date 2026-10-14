@@ -134,9 +134,10 @@ local AUTO_BUY_LIST = {
     ["Snowball Launcher"] = 3200,
     ["Floppy Chicken"] = 3200,
     ["Sitting"] = 2400,
+    ["Neo-Neko Needle"] = 750,
     ["Look At Me!"] = 1000,
     ["Shackled Celestial"] = 500,
-    ["Moonflower Greatsword"] = 3200,
+    ["Moonflower Greatsword"] = 3250,
     ["Strawberry Cake Blade"] = 290,
     ["Star Wand"] = 2900,
     ["Crystal Dual Sword Swing"] = 700,
@@ -208,9 +209,9 @@ local AUTO_BUY_LIST = {
     ["Cloud"] = 23500,
     ["Crystal Greatblade"] = 1900,
     ["Kitty Katana"] = 14000,
-    ["Neo-Neko Katana"] = 500,
+    ["Neo-Neko Katana"] = 750,
     ["Witch's Curse"] = 2800,
-    ["Wind Thorn"] = 700,
+    ["Wind Thorn"] = 850,
     ["Jackolantern"] = 17000,
     ["Eternal Piercer"] = 29000,
     ["Valentine Hearts"] = 9000,
@@ -242,7 +243,7 @@ local AUTO_BUY_LIST = {
     ["Dancinha"] = 3000,
     ["Riftflare Katana"] = 2900,
     ["Fox Katana"] = 5300,
-    ["Milk & Cookies"] = 3000,
+    ["Milk & Cookies"] = 2800,
     ["Kraken"] = 7000,
     ["Sakura's Requiem"] = 3800,
     ["Hitman"] = 5100,
@@ -289,6 +290,7 @@ local AUTO_BUY_LIST = {
     ["Lumen Petal"] = 300,
     ["Rosarium Blade"] = 380,
     ["Rose Blade"] = 530,
+    ["Trust Fall"] = 700,
 }
 
 --==================================================
@@ -354,7 +356,10 @@ local BOOSTED_ITEMS = {
     ["Dual Axolotl Blade"] = true,
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
+    ["Fragmented Wallblade"] = true,
     ["Tidewither"] = true,
+    ["Divinity Blade"] = true,
+    ["Chrono's Descent"] = true,
     ["Eclipse Gleam"] = true,
     ["Azurethorn Blade"] = true,
     ["Necrotic Ruler"] = true,
@@ -490,13 +495,12 @@ local BOOSTED_ITEMS = {
     ["Blizzard Slayer"] = true,
     ["Zeus' Lightning"] = true,
     ["Dual Lucky Fan"] = true,
-    ["Neo-Neko Katana"] = true,
-    ["Neo-Neko Needle"] = true,
     ["Samurai's Set"] = true,
     ["Wispwind Reaper"] = true,
     ["Hero of Hope Saber"] = true,
     ["Rose Wand"] = true,
     ["Frostblade"] = true,
+    ["Royal Relic Blade"] = true,
     ["Emerald Greatsword"] = true,
     ["Hidden Beast Blade"] = true,
     ["Dual Pumpkin Fan"] = true,
@@ -619,7 +623,6 @@ local BOOSTED_ITEMS = {
     ["Celestial Dawn Blade"] = true,
     ["Champion's Triumph"] = true,
     ["Divine Ruin Lore"] = true,
-    ["Dragon Explosion"] = true,
     ["Dragon Slayer"] = true,
     ["Fate's Fracture"] = true,
     ["France Explosion"] = true,
@@ -2732,9 +2735,16 @@ local function sendAutoBuyWebhook(itemName, itemType, itemKey, price, rap, profi
     end
 
     -- Dapatkan info akun pembeli (player yang menjalankan script)
-    local buyerName = LocalPlayer.Name
-    local buyerDisplayName = LocalPlayer.DisplayName
-    local buyerAvatarUrl = getOwnerAvatarUrl(LocalPlayer.UserId)  -- FIX: pakai fungsi yang sudah ada
+local lp = LocalPlayer or Players.LocalPlayer
+
+if not lp then
+    warn("[AUTO-BUY WEBHOOK] LocalPlayer nil, skip webhook.")
+    return false
+end
+
+local buyerName = lp.Name or "Unknown"
+local buyerDisplayName = lp.DisplayName or buyerName
+local buyerAvatarUrl = getOwnerAvatarUrl(lp.UserId)
 
     -- Dapatkan info penjual (ownerId)
     local ownerInfo = getOwnerInfo(ownerId)
