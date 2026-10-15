@@ -397,6 +397,8 @@ local BOOSTED_ITEMS = {
     ["Fragmented Wallblade"] = true,
     ["Moonflower Katana"] = true,
     ["Tidewither"] = true,
+    ["Ranked Season 19 Top 50"] = true,
+    ["Ranked Season 18 Top 50"] = true,
     ["Dragon Explosion"] = true,
     ["Ranked Season 20 Top 200"] = true,
     ["Ranked Season 20 Top 50"] = true,
@@ -3862,21 +3864,30 @@ if AUTO_BUY_ENABLED
             or result.isAccessory
         )
     ) then
-    -- Gap tiap item diambil dari AUTO_BUY_LIST; nama dicocokkan tanpa
-    -- membedakan huruf besar/kecil.
+    -- Prioritas harga maksimum:
+    -- 1) Kalau item ada di NUKE_ITEMS, gunakan limit tetap dari NUKE list.
+    --    Contoh Queen Blade limit 27,500 => tetap bisa dibeli sampai 27,500
+    --    walaupun RAP sekarang 21,000.
+    -- 2) Kalau tidak ada di NUKE_ITEMS, gunakan RAP terbaru - gap AUTO_BUY_LIST.
+    local nukeMaxPrice = tonumber(result.nukeLimit)
     local itemGap = findAutoBuyGap(result.itemName)
     if itemGap == nil then
         itemGap = findAutoBuyGap(result.rapKey)
     end
 
     local maxPrice
-    if itemGap ~= nil and itemGap >= 0 and tonumber(result.rap) then
+    if nukeMaxPrice ~= nil and nukeMaxPrice >= 0 then
+        maxPrice = nukeMaxPrice
+    elseif itemGap ~= nil and itemGap >= 0 and tonumber(result.rap) then
         maxPrice = math.max(0, tonumber(result.rap) - itemGap)
     end
 
     if maxPrice then
-        print(string.format("[AUTO-BUY] 🎯 MATCH LIST: %s | price: %d | max: %d",
-            result.itemName, result.price, maxPrice))
+        local priceRule = (nukeMaxPrice ~= nil and nukeMaxPrice >= 0)
+            and "NUKE limit"
+            or "RAP-gap"
+        print(string.format("[AUTO-BUY] 🎯 MATCH: %s | rule: %s | price: %d | max: %d",
+            result.itemName, priceRule, result.price, maxPrice))
 
         if result.price <= maxPrice then
             if not result.boothClaimed then
