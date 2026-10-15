@@ -126,172 +126,210 @@ local serverHop
 --==================================================
 
 local AUTO_BUY_ENABLED = true   -- matikan kalau gak mau auto-buy
-
+-- Nilai di AUTO_BUY_LIST = GAP di bawah RAP untuk item tersebut.
+-- Contoh: ["Queen Blade"] = 1500 berarti max beli = RAP terbaru - 1500.
+-- Atur gap tiap item sendiri; nilai awal 1500 hanyalah placeholder.
 local AUTO_BUY_LIST = {
-    ["Pulseheart Set"] = 3900,
-    ["Cosmic Wrath"] = 37000,
-    ["Lily Katana"] = 4200,
-    ["Snowball Launcher"] = 3200,
-    ["Floppy Chicken"] = 3200,
-    ["Sitting"] = 2400,
-    ["Neo-Neko Needle"] = 750,
-    ["Look At Me!"] = 1000,
-    ["Shackled Celestial"] = 500,
-    ["Moonflower Greatsword"] = 3250,
-    ["Strawberry Cake Blade"] = 290,
-    ["Star Wand"] = 2900,
-    ["Crystal Dual Sword Swing"] = 700,
-    ["Queen Blade"] = 27500,
-    ["Meowstruck"] = 1400,
-    ["Red Moon Katana"] = 2900,
-    ["Gravelight"] = 4500,
-    ["Hellfire King"] = 3200,
-    ["Hollow Oath Katana"] = 3200,
-    ["Black Oni Katana"] = 3200,
-    ["Eternal Scythe"] = 2400,
-    ["Enchanted Bluerose"] = 2100,
-    ["Sunset Pastelblade"] = 2000,
-    ["Glacialis Requiem"] = 1400,
-    ["Crystal Blade"] = 1500,
-    ["Black Ninja Star"] = 1700,
-    ["Riftspike Reaper"] = 1500,
-    ["Oceanic Reaper"] = 1500,
-    ["All-Star Striker"] = 1100,
-    ["Skeleton Bride"] = 6400,
-    ["Black Cat Scythe"] = 900,
-    ["Y2K Blade"] = 400,
-    ["North Blade"] = 1400,
-    ["Dual Chroma set"] = 11200,
-    ["Chroma Scythe"] = 7500,
-    ["The Curse"] = 3900,
-    ["Dual Yinyang Greatsword"] = 4500,
-    ["Prismatic Odachi"] = 3100,
-    ["Shark"] = 3000,
-    ["Aetherion"] = 1900,
-    ["Crimson Backblade"] = 2100,
-    ["Thorned Sovereign"] = 2100,
-    ["Water Slasher"] = 2100,
-    ["Calamity Guardian"] = 2000,
-    ["Amethyst Backblade"] = 2000,
-    ["Ethereal Bombardment"] = 2400,
-    ["Nebula Sniper"] = 1900,
-    ["Soulrender Scythe"] = 2400,
-    ["Blackhole Sword"] = 1900,
-    ["Candycane Sniper"] = 1800,
-    ["Draconic Greatsword"] = 1500,
-    ["Venomlight Scythe"] = 1800,
-    ["Santa Greatsword"] = 1700,
-    ["Dual Black Cat Scythe"] = 1500,
-    ["Red Ninja Star"] = 1400,
-    ["Pink Ninja Star"] = 1400,
-    ["Starshooter Rapier"] = 1300,
-    ["Blue Oni Katana"] = 2800,
-    ["Pink Oni Katana"] = 2800,
-    ["Purple Oni Katana"] = 2800,
-    ["Dual Wonderwisp Greatsword"] = 3000,
-    ["Pearl Angel Katana"] = 3500,
-    ["Dual Eternal Greatsword"] = 3100,
-    ["Chroma Ninja Star"] = 3300,
-    ["Proyection Sorcery Katana"] = 3400,
-    ["Hellwing Set"] = 4100,
-    ["Halberd"] = 3900,
-    ["Paw Punch"] = 5500,
-    ["Guardian of the underworld"] = 3700,
-    ["Devil Greatsword"] = 3900,
-    ["Frostbound Latern"] = 4300,
-    ["Poisoned Bunny"] = 4600,
-    ["Crystal Fairyblade"] = 4700,
-    ["Green Ninja Katana"] = 4800,
-    ["Red Ninja Katana"] = 5400,
-    ["Blue Ninja katana"] = 5500,
-    ["Void Blade"] = 1700,
-    ["Abyssal Blade"] = 1350,
-    ["Cloud"] = 23500,
-    ["Crystal Greatblade"] = 1900,
-    ["Kitty Katana"] = 14000,
-    ["Neo-Neko Katana"] = 750,
-    ["Witch's Curse"] = 2800,
-    ["Wind Thorn"] = 850,
-    ["Jackolantern"] = 17000,
-    ["Eternal Piercer"] = 29000,
-    ["Valentine Hearts"] = 9000,
-    ["Tiger's Katana"] = 12000,
-    ["Love For You"] = 14800,
-    ["Chroma Blade"] = 14500,
-    ["King Blade"] = 11500,
-    ["Puppy"] = 16000,
-    ["Pink Ninja Katana"] = 6500,
-    ["Flaming Sword"] = 3000,
-    ["Pillow"] = 2500,
-    ["Royal Duality"] = 50000,
-    ["Holy Blade"] = 2100,
-    ["Higanbana Katana"] = 4100,
-    ["Moonflower Katana"] = 18000,
-    ["Evil Deal"] = 3000,
-    ["Kitty Rocket"] = 9200,
-    ["Cat Paw"] = 10000,
-    ["Brutality Affection Bat"] = 7400,
-    ["Borealis"] = 28000,
-    ["Celestial Whisper"] = 25000,
-    ["Reindeer"] = 35000,
-    ["The Conjurer"] = 1500,
+    ["Pulseheart Set"] = 400, -- gap under RAP: atur sendiri
+    ["Cosmic Wrath"] = 5000, -- gap under RAP: atur sendiri
+    ["Lily Katana"] = 400, -- gap under RAP: atur sendiri
+    ["Snowball Launcher"] = 350, -- gap under RAP: atur sendiri
+    ["Floppy Chicken"] = 350, -- gap under RAP: atur sendiri
+    ["Sitting"] = 300, -- gap under RAP: atur sendiri
+    ["Neo-Neko Needle"] = 200, -- gap under RAP: atur sendiri
+    ["Look At Me!"] = 200, -- gap under RAP: atur sendiri
+    ["Moonflower Greatsword"] = 350, -- gap under RAP: atur sendiri
+    ["Strawberry Cake Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Star Wand"] = 350, -- gap under RAP: atur sendiri
+    ["Crystal Dual Sword Swing"] = 150, -- gap under RAP: atur sendiri
+    ["Queen Blade"] = 2000, -- gap under RAP: atur sendiri
+    ["Meowstruck"] = 250, -- gap under RAP: atur sendiri
+    ["Red Moon Katana"] = 350, -- gap under RAP: atur sendiri
+    ["Gravelight"] = 400, -- gap under RAP: atur sendiri
+    ["Hellfire King"] = 300, -- gap under RAP: atur sendiri
+    ["Hollow Oath Katana"] = 300, -- gap under RAP: atur sendiri
+    ["Black Oni Katana"] = 300, -- gap under RAP: atur sendiri
+    ["Enchanted Bluerose"] = 250, -- gap under RAP: atur sendiri
+    ["Glacialis Requiem"] = 250, -- gap under RAP: atur sendiri
+    ["Crystal Blade"] = 200, -- gap under RAP: atur sendiri
+    ["Riftspike Reaper"] = 300, -- gap under RAP: atur sendiri
+    ["Oceanic Reaper"] = 250, -- gap under RAP: atur sendiri
+    ["All-Star Striker"] = 200, -- gap under RAP: atur sendiri
+    ["Skeleton Bride"] = 500, -- gap under RAP: atur sendiri
+    ["Y2K Blade"] = 100, -- gap under RAP: atur sendiri
+    ["North Blade"] = 200, -- gap under RAP: atur sendiri
+    ["Dual Chroma set"] = 1000, -- gap under RAP: atur sendiri
+    ["Chroma Scythe"] = 500, -- gap under RAP: atur sendiri
+    ["The Curse"] = 400, -- gap under RAP: atur sendiri
+    ["Dual Yin Yang Greatsword"] = 1400, -- gap under RAP: atur sendiri
+    ["Prismatic Odachi"] = 300, -- gap under RAP: atur sendiri
+    ["Shark"] = 300, -- gap under RAP: atur sendiri
+    ["Aetherion"] = 200, -- gap under RAP: atur sendiri
+    ["Crimson Backblade"] = 250, -- gap under RAP: atur sendiri
+    ["Thorned Sovereign"] = 300, -- gap under RAP: atur sendiri    ["Calamity Guardian"] = 1500, -- gap under RAP: atur sendiri
+    ["Amethyst Backblade"] = 250, -- gap under RAP: atur sendiri
+    ["Ethereal Bombardment"] = 250, -- gap under RAP: atur sendiri
+    ["Nebula Sniper"] = 300, -- gap under RAP: atur sendiri
+    ["Soulrender Scythe"] = 250, -- gap under RAP: atur sendiri
+    ["Candycane Sniper"] = 200, -- gap under RAP: atur sendiri
+    ["Draconic Greatsword"] = 300, -- gap under RAP: atur sendiri
+    ["Venomlight Scythe"] = 300, -- gap under RAP: atur sendiri
+    ["Santa Greatsword"] = 250, -- gap under RAP: atur sendiri
+    ["Dual Black Cat Scythe"] = 250, -- gap under RAP: atur sendiri
+    ["Red Ninja Star"] = 250, -- gap under RAP: atur sendiri
+    ["Pink Ninja Star"] = 250, -- gap under RAP: atur sendiri
+    ["Starshooter Rapier"] = 200, -- gap under RAP: atur sendiri
+    ["Blue Oni Katana"] = 300, -- gap under RAP: atur sendiri
+    ["Pink Oni Katana"] = 300, -- gap under RAP: atur sendiri
+    ["Purple Oni Katana"] = 300, -- gap under RAP: atur sendiri
+    ["Dual Wonderwisp Greatsword"] = 400, -- gap under RAP: atur sendiri
+    ["Pearl Angel Katana"] = 400, -- gap under RAP: atur sendiri
+    ["Dual Eternal Greatsword"] = 400, -- gap under RAP: atur sendiri
+    ["Chroma Ninja Star"] = 350, -- gap under RAP: atur sendiri
+    ["Hellwing Set"] = 400, -- gap under RAP: atur sendiri
+    ["Halberd"] = 350, -- gap under RAP: atur sendiri
+    ["Paw Punch"] = 400, -- gap under RAP: atur sendiri
+    ["Guardian of the underworld"] = 500, -- gap under RAP: atur sendiri
+    ["Devil Greatsword"] = 350, -- gap under RAP: atur sendiri
+    ["Frostbound Latern"] = 350, -- gap under RAP: atur sendiri
+    ["Poisoned Bunny"] = 400, -- gap under RAP: atur sendiri
+    ["Crystal Fairyblade"] = 400, -- gap under RAP: atur sendiri
+    ["Green Ninja Katana"] = 400, -- gap under RAP: atur sendiri
+    ["Red Ninja Katana"] = 450, -- gap under RAP: atur sendiri
+    ["Blue Ninja katana"] = 400, -- gap under RAP: atur sendiri
+    ["Void Blade"] = 250, -- gap under RAP: atur sendiri
+    ["Abyssal Blade"] = 250, -- gap under RAP: atur sendiri
+    ["Cloud"] = 1000, -- gap under RAP: atur sendiri
+    ["Crystal Greatblade"] = 250, -- gap under RAP: atur sendiri
+    ["Kitty Katana"] = 1000, -- gap under RAP: atur sendiri
+    ["Neo-Neko Katana"] = 150, -- gap under RAP: atur sendiri
+    ["Witch's Curse"] = 400, -- gap under RAP: atur sendiri
+    ["Wind Thorn"] = 130, -- gap under RAP: atur sendiri
+    ["Jackolantern"] = 1000, -- gap under RAP: atur sendiri
+    ["Eternal Piercer"] = 1000, -- gap under RAP: atur sendiri
+    ["Valentine Hearts"] = 700, -- gap under RAP: atur sendiri
+    ["Tiger's Katana"] = 1000, -- gap under RAP: atur sendiri
+    ["Love For You"] = 700, -- gap under RAP: atur sendiri
+    ["Chroma Blade"] = 700, -- gap under RAP: atur sendiri
+    ["King Blade"] = 2000, -- gap under RAP: atur sendiri
+    ["Puppy"] = 1500, -- gap under RAP: atur sendiri
+    ["Pink Ninja Katana"] = 500, -- gap under RAP: atur sendiri
+    ["Flaming Sword"] = 300, -- gap under RAP: atur sendiri
+    ["Pillow"] = 300, -- gap under RAP: atur sendiri
+    ["Royal Duality"] = 4000, -- gap under RAP: atur sendiri
+    ["Holy Blade"] = 250, -- gap under RAP: atur sendiri
+    ["Higanbana Katana"] = 400, -- gap under RAP: atur sendiri
+    ["Moonflower Katana"] = 3000, -- gap under RAP: atur sendiri
+    ["Evil Deal"] = 400, -- gap under RAP: atur sendiri
+    ["Kitty Rocket"] = 500, -- gap under RAP: atur sendiri
+    ["Cat Paw"] = 1000, -- gap under RAP: atur sendiri
+    ["Brutality Affection Bat"] = 500, -- gap under RAP: atur sendiri
+    ["Borealis"] = 1000, -- gap under RAP: atur sendiri
+    ["Celestial Whisper"] = 1000, -- gap under RAP: atur sendiri
+    ["Reindeer"] = 1000, -- gap under RAP: atur sendiri
+    ["The Conjurer"] = 250, -- gap under RAP: atur sendiri
     --["Siam Ember Axe"] = 98000,
     --["Zombie Slide"] = 100000,
-    ["Prince Blade"] = 2550,
-    ["Slime"] = 7400,
-    ["Aligned Constellation"] = 4000,
-    ["Dancinha"] = 3000,
-    ["Riftflare Katana"] = 2900,
-    ["Fox Katana"] = 5300,
-    ["Milk & Cookies"] = 2800,
-    ["Kraken"] = 7000,
-    ["Sakura's Requiem"] = 3800,
-    ["Hitman"] = 5100,
-    ["Angel Greatsword"] = 3000,
+    ["Prince Blade"] = 250, -- gap under RAP: atur sendiri
+    ["Slime"] = 500, -- gap under RAP: atur sendiri
+    ["Aligned Constellation"] = 350, -- gap under RAP: atur sendiri
+    ["Dancinha"] = 500, -- gap under RAP: atur sendiri
+    ["Riftflare Katana"] = 400, -- gap under RAP: atur sendiri
+    ["Fox Katana"] = 500, -- gap under RAP: atur sendiri
+    ["Milk & Cookies"] = 400, -- gap under RAP: atur sendiri
+    ["Kraken"] = 500, -- gap under RAP: atur sendiri
+    ["Sakura's Requiem"] = 350, -- gap under RAP: atur sendiri
+    ["Hitman"] = 500, -- gap under RAP: atur sendiri
+    ["Angel Greatsword"] = 350, -- gap under RAP: atur sendiri
     --["Bunny"] = 120000,
     --["Ranked Season 15 Top 50"] = 31000,
-    ["Icebound Dominus"] = 34000,
-    ["Regret Blades"] = 19000,
-    ["Eternum Galepiercer"] = 9500,
-    ["Phantom Chase"] = 110,
-    ["Wicked Crow"] = 8700,
-    ["Hug"] = 16000,
-    ["Black Ninja Katana"] = 8900,
-    ["Loving Backblade"] = 9000,
+    ["Icebound Dominus"] = 4000, -- gap under RAP: atur sendiri
+    ["Regret Blades"] = 2000, -- gap under RAP: atur sendiri
+    ["Eternum Galepiercer"] = 1000, -- gap under RAP: atur sendiri
+    ["Phantom Chase"] = 100, -- gap under RAP: atur sendiri
+    ["Wicked Crow"] = 400, -- gap under RAP: atur sendiri
+    ["Hug"] = 1000, -- gap under RAP: atur sendiri
+    ["Black Ninja Katana"] = 700, -- gap under RAP: atur sendiri
+    ["Loving Backblade"] = 1000, -- gap under RAP: atur sendiri
     --["T-Rex"] = 11500,
-    ["Jolly Scythe Set"] = 1800,
-    ["Kitty Launcher"] = 16500,
-    ["Fallen Angel"] = 20000,
-    ["Chroma Ninja Katana"] = 24500,
-    ["Chroma Seal"] = 31000,
+    ["Jolly Scythe Set"] = 250, -- gap under RAP: atur sendiri
+    ["Kitty Launcher"] = 1300, -- gap under RAP: atur sendiri
+    ["Fallen Angel"] = 1300, -- gap under RAP: atur sendiri
+    ["Chroma Ninja Katana"] = 1500, -- gap under RAP: atur sendiri
+    ["Chroma Seal"] = 1500, -- gap under RAP: atur sendiri
     --["Seraphim"] = 39000,
-    ["Montagem Miau"] = 7200,
-    ["Legs Kickin'"] = 8300,
-    ["Winter Wolf"] = 20000,
-    ["Dual Leviathan Set"] = 3800,
-    ["Gothic Bunny Blade"] = 300,
-    ["Watching The Stars"] = 3000,
-    ["Rabicasada"] = 1700,
-    ["Bring it Arround"] = 1700,
-    ["Jackpot"] = 3700,
-    ["King Throne"] = 2900,
-    ["Devil Greatsword Emote"] = 3000,
-    ["Popular"] = 1400,
-    ["Kitty Launcher Emote"] = 2400,
-    ["Crab Rave"] = 2200,
+    ["Montagem Miau"] = 400, -- gap under RAP: atur sendiri
+    ["Legs Kickin'"] = 500, -- gap under RAP: atur sendiri
+    ["Winter Wolf"] = 1400, -- gap under RAP: atur sendiri
+    ["Dual Leviathan Set"] = 400, -- gap under RAP: atur sendiri
+    ["Gothic Bunny Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Rabicasada"] = 300, -- gap under RAP: atur sendiri
+    ["Jackpot"] = 400, -- gap under RAP: atur sendiri
+    ["Popular"] = 250, -- gap under RAP: atur sendiri
+    ["Kitty Launcher Emote"] = 400, -- gap under RAP: atur sendiri
+    ["Crab Rave"] = 350, -- gap under RAP: atur sendiri
     --["Luna Bala"] = 1900,
     --["Floating Sword"] = 2300,
-    ["Orbital [NEBULA YORU]"] = 1500,
-    ["Coffin Explosion"] = 7000,
-    ["Phantom Ops"] = 2900,
-    ["Emperor Blade"] = 900,
-    ["Floating Hearts Aura"] = 180,
-    ["Menacing"] = 340,
-    ["Lumen Petal"] = 300,
-    ["Rosarium Blade"] = 380,
-    ["Rose Blade"] = 530,
-    ["Trust Fall"] = 700,
+    ["Orbital [NEBULA YORU]"] = 300, -- gap under RAP: atur sendiri
+    ["Phantom Ops"] = 1000, -- gap under RAP: atur sendiri
+    ["Emperor Blade"] = 180, -- gap under RAP: atur sendiri
+    ["Floating Hearts Aura"] = 150, -- gap under RAP: atur sendiri
+    ["Menacing"] = 100, -- gap under RAP: atur sendiri
+    ["Lumen Petal"] = 100, -- gap under RAP: atur sendiri
+    ["Rosarium Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Rose Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Arachne Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Black Cat Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Sinister Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Eternal Nightmare"] = 100, -- gap under RAP: atur sendiri
+    ["Wicked Reaper"] = 100, -- gap under RAP: atur sendiri
+    ["Samurai Katana"] = 100, -- gap under RAP: atur sendiri
+    ["Final Phase"] = 100, -- gap under RAP: atur sendiri
+    ["Corrupted Loveblade"] = 100, -- gap under RAP: atur sendiri
+    ["Purity Blade"] = 100, -- gap under RAP: atur sendiri
+    ["Rose Gift"] = 800, -- gap under RAP: atur sendiri
+    ["Trust Fall"] = 150, -- gap under RAP: atur sendiri
 }
+
+-- Pencocokan nama item dibuat case-insensitive dan dipakai bersama
+-- oleh pengecekan sales history serta logika auto-buy.
+local function findAutoBuyGap(name)
+    if name == nil then return nil end
+    local targetName = string.lower(tostring(name))
+    for listName, gap in pairs(AUTO_BUY_LIST) do
+        if string.lower(listName) == targetName then
+            return tonumber(gap)
+        end
+    end
+    return nil
+end
+
+-- Item berikut hanya boleh dibeli kalau listing-nya varian NORMAL.
+-- Listing Finisher, Mount, atau Accessory akan dilewati Auto-Buy.
+local AUTO_BUY_NORMAL_ONLY_ITEMS = {
+    ["Moonflower Katana"] = true,
+    ["Jackolantern"] = true,
+    ["Red Ninja Katana"] = true,
+    ["Green Ninja Katana"] = true,
+    ["Blue Ninja Katana"] = true,
+    ["Pink Ninja Katana"] = true,
+    ["Black Ninja Katana"] = true,
+    ["Chroma Ninja Katana"] = true,
+    ["Chroma Blade"] = true,
+    ["Winter Wolf"] = true,
+    ["Reindeer"] = true,
+}
+
+local function isNormalOnlyAutoBuyItem(name)
+    if name == nil then return false end
+    local targetName = string.lower(tostring(name))
+    for listName in pairs(AUTO_BUY_NORMAL_ONLY_ITEMS) do
+        if string.lower(listName) == targetName then
+            return true
+        end
+    end
+    return false
+end
 
 --==================================================
 -- SALES HISTORY CONFIG (TAMBAHAN)
@@ -357,7 +395,17 @@ local BOOSTED_ITEMS = {
     ["Yin Yang Katana"] = true,
     ["Radiant Duckling Explosion"] = true,
     ["Fragmented Wallblade"] = true,
+    ["Moonflower Katana"] = true,
     ["Tidewither"] = true,
+    ["Dragon Explosion"] = true,
+    ["Ranked Season 20 Top 200"] = true,
+    ["Ranked Season 20 Top 50"] = true,
+    ["Shackled Celestial"] = true,
+    ["Ranked Season 18 Top 200"] = true,
+    ["Ranked Season 19 Top 200"] = true,
+    ["King Blade"] = true,
+    ["Hallow's Edge"] = true,
+    ["Yin Yang Scythe"] = true,
     ["Divinity Blade"] = true,
     ["Chrono's Descent"] = true,
     ["Eclipse Gleam"] = true,
@@ -2481,7 +2529,7 @@ local ItemDetailsCache = {}
 
 local function getItemDetails(itemType, itemKey)
     if not itemType or not itemKey then
-        return { isFinisher = false, hasMount = false }
+        return { isFinisher = false, hasMount = false, hasAccessory = false }
     end
 
     local cacheKey = tostring(itemType) .. ":" .. tostring(itemKey)
@@ -2489,7 +2537,7 @@ local function getItemDetails(itemType, itemKey)
         return ItemDetailsCache[cacheKey]
     end
 
-    local details = { isFinisher = false, hasMount = false, isDual = false }
+    local details = { isFinisher = false, hasMount = false, hasAccessory = false, isDual = false }
 
     -- Deteksi Dual dari nama key
     if string.find(string.lower(tostring(itemKey)), "dual") then
@@ -2517,6 +2565,9 @@ local function getItemDetails(itemType, itemKey)
                 if string.find(n, "mount") and attrValue then
                     details.hasMount = true
                 end
+                if string.find(n, "accessory") and attrValue then
+                    details.hasAccessory = true
+                end
                 if string.find(n, "dual") and attrValue then
                     details.isDual = true
                 end
@@ -2532,6 +2583,9 @@ local function getItemDetails(itemType, itemKey)
                 end
                 if string.find(n, "mount") then
                     details.hasMount = true
+                end
+                if string.find(n, "accessory") then
+                    details.hasAccessory = true
                 end
             end
         end)
@@ -2613,11 +2667,32 @@ local function sendWebhook(webhookType, ownerId, listing)
     local ownerProfileUrl = getOwnerProfileUrl(ownerId)
     local itemImageUrl = getItemImageUrl(listing.itemType, listing.itemKey)
 
-    local details = getItemDetails(listing.itemType, listing.itemKey)
+    -- PENTING: label varian harus berasal dari listing yang sedang discan,
+    -- bukan template sword di getItemDetails() (template bisa punya child/metadata
+    -- Finisher/Mount walaupun listing yang dijual adalah varian normal).
+    local sourceItem = typeof(listing.Item) == "table" and listing.Item or listing
+    local function listingFlag(flagName)
+        return sourceItem[flagName] == true
+    end
+    local listingType = string.lower(tostring(
+        sourceItem.Type or sourceItem.ItemType or listing.itemType or ""
+    ))
+
+    local isListingFinisher = listing.isFinisher == true
+        or listingFlag("Finisher")
+    local isListingMount = listing.isMount == true
+        or listingFlag("Mount")
+        or listingType == "mount"
+    local isListingAccessory = listing.isAccessory == true
+        or listingFlag("Accessory")
+        or listingType == "accessory"
 
     local tags = {}
-    if details.isFinisher then table.insert(tags, "Finisher") end
-    if details.hasMount then table.insert(tags, "Mount") end
+    if isListingFinisher then table.insert(tags, "Finisher") end
+    -- Accessory juga ditampilkan sebagai Mount sesuai permintaan.
+    if isListingMount or isListingAccessory then
+        table.insert(tags, "Mount")
+    end
 
     local itemDisplay = "**" .. tostring(listing.itemName) .. "**"
     if #tags > 0 then
@@ -3004,7 +3079,7 @@ local function inspectListing(
     local itemName =
         displayName
         or itemKey
-
+    
     local boothMetadata = getBoothMetadata(
         ownerId,
         listing,
@@ -3127,9 +3202,10 @@ local function inspectListing(
 
        local boosted = boostedCandidate and isUnderrap
 
-    -- Cek AUTO_BUY_LIST lebih awal biar bisa skip sales history
-    local inAutoBuyList = AUTO_BUY_LIST[itemName] ~= nil
-        or AUTO_BUY_LIST[rapKey] ~= nil
+    -- Cek AUTO_BUY_LIST secara case-insensitive agar konsisten
+    -- dengan pencocokan di bagian auto-buy.
+    local inAutoBuyList = findAutoBuyGap(itemName) ~= nil
+        or findAutoBuyGap(rapKey) ~= nil
 
     --==================================================
     -- SALES HISTORY — SKIP kalau item ada di AUTO_BUY_LIST
@@ -3242,6 +3318,26 @@ local function inspectListing(
         return {
             itemName = itemName,
             itemKey = itemKey,
+            -- Varian dibaca dari data listing yang sedang diproses, bukan template sword.
+            isFinisher = (
+                typeof(listing.Item) == "table" and listing.Item.Finisher == true
+            ) or listing.Finisher == true,
+            isMount = (
+                (typeof(listing.Item) == "table" and (
+                    listing.Item.Mount == true
+                    or string.lower(tostring(listing.Item.Type or listing.Item.ItemType or "")) == "mount"
+                ))
+                or listing.Mount == true
+                or string.lower(tostring(listing.ItemType or listing.itemType or "")) == "mount"
+            ),
+            isAccessory = (
+                (typeof(listing.Item) == "table" and (
+                    listing.Item.Accessory == true
+                    or string.lower(tostring(listing.Item.Type or listing.Item.ItemType or "")) == "accessory"
+                ))
+                or listing.Accessory == true
+                or string.lower(tostring(listing.ItemType or listing.itemType or "")) == "accessory"
+            ),
             rapKey = rapKey,
             itemType = itemType,
             price = price,
@@ -3754,29 +3850,31 @@ local function scan()
 --==================================================
 
 --==================================================
--- AUTO-BUY (verbose logging)
+-- AUTO-BUY (harga maksimum dihitung dari RAP terkini)
 --==================================================
-if AUTO_BUY_ENABLED and not result.boosted then
-    -- Lookup AUTO_BUY_LIST (case-insensitive)
-    local maxPrice
-    if result.itemName then
-        for listName, listPrice in pairs(AUTO_BUY_LIST) do
-            if string.lower(listName) == string.lower(result.itemName) then
-                maxPrice = listPrice
-                break
-            end
-        end
-    end
-    if not maxPrice and result.rapKey then
-        for listName, listPrice in pairs(AUTO_BUY_LIST) do
-            if string.lower(listName) == string.lower(result.rapKey) then
-                maxPrice = listPrice
-                break
-            end
-        end
+if AUTO_BUY_ENABLED
+    and not result.boosted
+    and not (
+        isNormalOnlyAutoBuyItem(result.itemName)
+        and (
+            result.isFinisher
+            or result.isMount
+            or result.isAccessory
+        )
+    ) then
+    -- Gap tiap item diambil dari AUTO_BUY_LIST; nama dicocokkan tanpa
+    -- membedakan huruf besar/kecil.
+    local itemGap = findAutoBuyGap(result.itemName)
+    if itemGap == nil then
+        itemGap = findAutoBuyGap(result.rapKey)
     end
 
-            if maxPrice then
+    local maxPrice
+    if itemGap ~= nil and itemGap >= 0 and tonumber(result.rap) then
+        maxPrice = math.max(0, tonumber(result.rap) - itemGap)
+    end
+
+    if maxPrice then
         print(string.format("[AUTO-BUY] 🎯 MATCH LIST: %s | price: %d | max: %d",
             result.itemName, result.price, maxPrice))
 
@@ -3787,7 +3885,7 @@ if AUTO_BUY_ENABLED and not result.boosted then
                     result.itemName, tostring(ownerId), tostring(result.boothLocation)
                 ))
             else
-                                local success = attemptPurchase(
+                local success = attemptPurchase(
                     ownerId, listingId,
                     result.itemName, result.price, maxPrice
                 )
